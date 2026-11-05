@@ -1,24 +1,78 @@
 :root {
   color-scheme: dark;
-  --bg: #080a0f;
-  --bg-deep: #05070b;
-  --bg-elev: #0f131c;
-  --bg-elev-2: #151a26;
-  --card: rgba(17, 22, 33, 0.88);
-  --border: rgba(255, 255, 255, 0.075);
-  --border-strong: rgba(255, 255, 255, 0.14);
-  --text: #e9edf5;
-  --text-dim: #9aa5ba;
-  --text-faint: #6c778e;
-  --accent: #8b7cff;
-  --accent-2: #34d9c3;
-  --accent-soft: rgba(139, 124, 255, 0.14);
-  --good: #3ddc97;
-  --warn: #ffb020;
-  --bad: #ff5c6c;
-  --flat: #6eb6ff;
-  --radius: 18px;
-  --shadow-card: 0 20px 60px -30px rgba(0, 0, 0, 0.75);
+
+  /* 背景与表面 */
+  --bg: #090a0e;
+  --bg-deep: #06070a;
+  --surface: #12141b;
+  --surface-2: #191c25;
+  --surface-3: #222633;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.15);
+
+  /* 文字 */
+  --text: #f2f4f9;
+  --text-2: #b4bbcb;
+  --text-3: #7c8497;
+  --text-4: #5d6578;
+
+  /* 强调色：全站只用一个 */
+  --accent: #8f7dff;
+  --accent-strong: #a596ff;
+  --accent-deep: #6d5cf0;
+  --accent-soft: rgba(143, 125, 255, 0.14);
+  --accent-line: rgba(143, 125, 255, 0.4);
+  --on-accent: #0b0a16;
+
+  /* 音准语义色：色盲友好（蓝绿 / 琥珀 / 天蓝），始终配 ↑↓ 或文字 */
+  --good: #2ec4a0;
+  --good-soft: rgba(46, 196, 160, 0.14);
+  --sharp: #e8a33d;
+  --sharp-soft: rgba(232, 163, 61, 0.14);
+  --flat: #5aa9f5;
+  --flat-soft: rgba(90, 169, 245, 0.14);
+  --neutral: #7e879a;
+
+  /* 字号 */
+  --fs-xs: 11px;
+  --fs-sm: 13px;
+  --fs-base: 15px;
+  --fs-md: 17px;
+  --fs-lg: 20px;
+  --fs-xl: 24px;
+  --fs-2xl: 30px;
+  --fs-hero: 38px;
+  --fs-display: 64px;
+
+  /* 间距 */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+
+  /* 圆角 */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --r-xl: 24px;
+  --r-pill: 999px;
+
+  /* 布局 */
+  --content-w: 720px;
+  --stage-w: 920px;
+  --tabbar-h: 62px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  --shadow-card: 0 24px 60px -32px rgba(0, 0, 0, 0.9);
+  --shadow-float: 0 18px 50px -20px rgba(0, 0, 0, 0.8);
+
   font-family:
     system-ui,
     -apple-system,
@@ -57,10 +111,11 @@ body {
   min-height: 100svh;
   color: var(--text);
   background:
-    radial-gradient(1100px 680px at 78% -12%, rgba(111, 86, 255, 0.2), transparent 62%),
-    radial-gradient(900px 620px at -12% 24%, rgba(52, 217, 195, 0.075), transparent 62%),
+    radial-gradient(900px 540px at 80% -18%, rgba(143, 125, 255, 0.14), transparent 62%),
+    radial-gradient(700px 480px at 4% 38%, rgba(46, 196, 160, 0.05), transparent 60%),
     var(--bg);
   background-attachment: fixed;
+  overscroll-behavior-y: none;
 }
 
 button,
@@ -104,12 +159,24 @@ button {
   min-width: 0;
 }
 
+button:disabled {
+  cursor: default;
+}
+
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-strong);
   outline-offset: 2px;
 }
 
 ::selection {
   color: #fff;
-  background: rgba(139, 124, 255, 0.45);
+  background: rgba(143, 125, 255, 0.45);
+}
+
+/* 细滚动条，桌面端 */
+@media (pointer: fine) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+  }
 }

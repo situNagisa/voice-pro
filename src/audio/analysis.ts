@@ -139,8 +139,11 @@ export interface Phrase {
   notes: Note[]
 }
 
-/** 参考音符间隔 > 0.6s 视为新乐句。 */
-export function buildPhrases(notes: Note[]): Phrase[] {
+/**
+ * 参考音符间隔 > 0.6s 视为新乐句。
+ * 另外限制单句时长：连续不断的旋律也能切成便于回看的小段。
+ */
+export function buildPhrases(notes: Note[], maxSpan = 7.5): Phrase[] {
   const sorted = notes
     .filter((note) => Number.isFinite(note.start) && Number.isFinite(note.end) && note.end > note.start)
     .slice()
@@ -149,11 +152,15 @@ export function buildPhrases(notes: Note[]): Phrase[] {
   const groups: Note[][] = []
   let current: Note[] = []
   let lastEnd = Number.NEGATIVE_INFINITY
+  let groupStart = Number.NEGATIVE_INFINITY
   for (const note of sorted) {
-    if (current.length > 0 && note.start - lastEnd > 0.6) {
+    const tooLong = current.length > 0 && note.start - groupStart > maxSpan
+    if (current.length > 0 && (note.start - lastEnd > 0.6 || tooLong)) {
       groups.push(current)
       current = []
+      groupStart = Number.NEGATIVE_INFINITY
     }
+    if (current.length === 0) groupStart = note.start
     current.push(note)
     lastEnd = Math.max(lastEnd, note.end)
   }

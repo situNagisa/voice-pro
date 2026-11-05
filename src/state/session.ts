@@ -12,6 +12,8 @@ export interface LoadedSong {
   temporary: boolean
   warning?: string
   importedAt: number
+  /** 内置示例歌的原始 id，用于练习记录回看时重新合成原唱。 */
+  demoId?: string
 }
 
 export interface PracticeSession {

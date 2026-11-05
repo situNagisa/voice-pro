@@ -1,32 +1,55 @@
 import { useEffect, useState } from 'react'
-import type { LoopRange } from './audio/player'
+import type { InputSource } from './audio/capture'
+import type { PracticeRecord, PracticeRecordMeta } from './state/records'
 import {
-  addRecentSong,
-  clearRecentSongs,
-  loadRecentSongs,
-  removeRecentSong,
-} from './state/library'
-import type { RecentSong } from './state/library'
-import type { LoadedSong, PracticeSession } from './state/session'
+  clearRecords,
+  deleteRecord,
+  listRecords,
+  loadRecord,
+} from './state/records'
+import type { LoadedSong } from './state/session'
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from './state/settings'
 import type { Settings } from './state/settings'
-import { FreeTune } from './views/FreeTune'
-import { Home } from './views/Home'
+import { BottomNav } from './ui/BottomNav'
+import type { TabKey } from './ui/BottomNav'
+import { SettingsSheet } from './ui/SettingsSheet'
+import { PrepView } from './views/PrepView'
 import { PracticeView } from './views/Practice'
+import type { PracticeResult } from './views/Practice'
+import { RecordsView } from './views/Records'
 import { ReportView } from './views/Report'
-import { SettingsView } from './views/Settings'
+import { ReviewView } from './views/Review'
+import { SongsHome } from './views/SongsHome'
+import { TunerView } from './views/Tuner'
 import './App.css'
 
-type View = 'home' | 'practice' | 'report' | 'free' | 'settings'
+type Overlay =
+  | { kind: 'prep'; song: LoadedSong }
+  | { kind: 'practice'; song: LoadedSong; source: InputSource }
+  | { kind: 'report'; result: PracticeResult }
+  | {
+      kind: 'review'
+      record: PracticeRecord
+      original: AudioBuffer | null
+      startAt: number
+      returnTo: Overlay | null
+    }
 
 function App() {
-  const [view, setView] = useState<View>('home')
+  const [tab, setTab] = useState<TabKey>('songs')
   const [settings, setSettings] = useState<Settings>(() => loadSettings())
-  const [recent, setRecent] = useState<RecentSong[]>(() => loadRecentSongs())
-  const [song, setSong] = useState<LoadedSong | null>(null)
-  const [session, setSession] = useState<PracticeSession | null>(null)
-  const [loop, setLoop] = useState<LoopRange | null>(null)
-  const [loopLabel, setLoopLabel] = useState<string | null>(null)
+  const [overlay, setOverlay] = useState<Overlay | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [records, setRecords] = useState<PracticeRecordMeta[]>([])
+  const [recordsLoading, setRecordsLoading] = useState(true)
+  const [openingRecord, setOpeningRecord] = useState(false)
+
+  async function refreshRecords(): Promise<void> {
+    setRecordsLoading(true)
+    const next = await listRecords()
+    setRecords(next)
+    setRecordsLoading(false)
+  }
 
   useEffect(() => {
     saveSettings(settings)
@@ -34,104 +57,181 @@ function App() {
 
   useEffect(() => {
     window.scrollTo(0, 0)
-  }, [view])
+  }, [tab, overlay])
+
+  useEffect(() => {
+    // 首次进入时读取本机记录；之后的增删会主动刷新
+    void refreshRecords()
+  }, [])
 
   function patchSettings(patch: Partial<Settings>): void {
     setSettings((current) => ({ ...current, ...patch }))
   }
 
-  function handleReady(loaded: LoadedSong): void {
-    setSong(loaded)
-    setSession(null)
-    setLoop(null)
-    setLoopLabel(null)
-    setRecent(
-      addRecentSong({
-        id: loaded.id,
-        name: loaded.name,
-        duration: loaded.buffer.duration,
-        noteCount: loaded.melody.notes.length,
-        temporary: loaded.temporary,
-        importedAt: loaded.importedAt,
-      }),
-    )
-    setView('practice')
+  function openSong(song: LoadedSong): void {
+    setOverlay({ kind: 'prep', song })
   }
 
-  function handleSessionEnd(nextSession: PracticeSession): void {
-    setSession(nextSession)
-    setView('report')
+  function startPractice(song: LoadedSong, source: InputSource): void {
+    setOverlay({ kind: 'practice', song, source })
   }
 
-  function handlePracticeLoop(range: LoopRange, label: string): void {
-    setLoop(range)
-    setLoopLabel(label)
-    setView('practice')
+  function finishPractice(result: PracticeResult): void {
+    setOverlay({ kind: 'report', result })
+    void refreshRecords()
   }
 
-  function handleRestart(): void {
-    setLoop(null)
-    setLoopLabel(null)
-    setView('practice')
+  function openReviewFromReport(result: PracticeResult, startAt: number): void {
+    const reportOverlay: Overlay = { kind: 'report', result }
+    setOverlay({
+      kind: 'review',
+      record: result.record,
+      original: result.song.buffer,
+      startAt,
+      returnTo: reportOverlay,
+    })
   }
 
-  function handleHome(): void {
-    setView('home')
+  async function openRecord(id: string): Promise<void> {
+    setOpeningRecord(true)
+    try {
+      const record = await loadRecord(id)
+      if (!record) {
+        setRecords(await listRecords())
+        return
+      }
+      const sortedPoints = record.points.slice().sort((a, b) => a.t - b.t)
+      const firstNote = record.melodyNotes.slice().sort((a, b) => a.start - b.start)[0]
+      const targetStart = Math.max(0, firstNote?.start ?? 0)
+      const startPoint =
+        sortedPoints.find((point) => point.t >= targetStart - 0.2) ?? sortedPoints[0]
+      setOverlay({
+        kind: 'review',
+        record,
+        original: null,
+        startAt: startPoint?.t ?? targetStart,
+        returnTo: null,
+      })
+    } catch (error) {
+      console.warn('[voice-pro] 打开记录失败', error)
+    } finally {
+      setOpeningRecord(false)
+    }
   }
 
-  if (view === 'free') {
-    return <FreeTune onHome={handleHome} />
+  async function removeRecord(id: string): Promise<void> {
+    try {
+      await deleteRecord(id)
+    } catch (error) {
+      console.warn('[voice-pro] 删除记录失败', error)
+    }
+    await refreshRecords()
   }
 
-  if (view === 'settings') {
-    return (
-      <SettingsView
+  async function clearAllRecords(): Promise<void> {
+    try {
+      await clearRecords()
+    } catch (error) {
+      console.warn('[voice-pro] 清空记录失败', error)
+    }
+    await refreshRecords()
+  }
+
+  function backToTabs(): void {
+    setOverlay(null)
+    void refreshRecords()
+  }
+
+  let content
+  if (overlay?.kind === 'prep') {
+    content = (
+      <PrepView
+        song={overlay.song}
         settings={settings}
-        recentCount={recent.length}
-        onPatch={patchSettings}
-        onReset={() => setSettings({ ...DEFAULT_SETTINGS })}
-        onClearRecent={() => setRecent(clearRecentSongs())}
-        onHome={handleHome}
+        onBack={backToTabs}
+        onStart={(source) => startPractice(overlay.song, source)}
       />
     )
-  }
-
-  if (view === 'practice' && song) {
-    return (
+  } else if (overlay?.kind === 'practice') {
+    content = (
       <PracticeView
-        key={`${song.id}-${loop?.start ?? 'full'}-${loop?.end ?? ''}`}
-        song={song}
+        key={`${overlay.song.id}-${overlay.source}`}
+        song={overlay.song}
         settings={settings}
+        source={overlay.source}
+        initialLoop={null}
+        loopLabel={null}
         onPatchSettings={patchSettings}
-        initialLoop={loop}
-        initialLoopLabel={loopLabel}
-        onEnd={handleSessionEnd}
-        onHome={handleHome}
+        onFinish={finishPractice}
+        onBack={backToTabs}
       />
     )
-  }
-
-  if (view === 'report' && session) {
-    return (
+  } else if (overlay?.kind === 'report') {
+    content = (
       <ReportView
-        session={session}
-        onHome={handleHome}
-        onRestart={handleRestart}
-        onPracticeLoop={handlePracticeLoop}
+        record={overlay.result.record}
+        onBack={backToTabs}
+        onReview={(startAt) => openReviewFromReport(overlay.result, startAt)}
+        onRestart={() => setOverlay({ kind: 'prep', song: overlay.result.song })}
       />
+    )
+  } else if (overlay?.kind === 'review') {
+    content = (
+      <ReviewView
+        key={overlay.record.id}
+        record={overlay.record}
+        original={overlay.original}
+        startAt={overlay.startAt}
+        onBack={() => setOverlay(overlay.returnTo)}
+      />
+    )
+  } else {
+    content = (
+      <>
+        {tab === 'songs' && (
+          <SongsHome
+            settings={settings}
+            onSong={openSong}
+            onOpenSettings={() => setSettingsOpen(true)}
+          />
+        )}
+        {tab === 'tuner' && (
+          <TunerView onOpenSettings={() => setSettingsOpen(true)} />
+        )}
+        {tab === 'records' && (
+          <RecordsView
+            records={records}
+            loading={recordsLoading}
+            onOpen={(id) => void openRecord(id)}
+            onDelete={(id) => void removeRecord(id)}
+            onGoSongs={() => setTab('songs')}
+            onOpenSettings={() => setSettingsOpen(true)}
+          />
+        )}
+        <BottomNav active={tab} onChange={setTab} />
+      </>
     )
   }
 
   return (
-    <Home
-      settings={settings}
-      recent={recent}
-      onReady={handleReady}
-      onFree={() => setView('free')}
-      onSettings={() => setView('settings')}
-      onRemoveRecent={(id) => setRecent(removeRecentSong(id))}
-      onClearRecent={() => setRecent(clearRecentSongs())}
-    />
+    <div className={`app-shell ${overlay ? 'has-overlay' : ''}`}>
+      {content}
+      {openingRecord && (
+        <div className="boot-overlay">
+          <div className="spinner large" />
+          <span>正在读取记录…</span>
+        </div>
+      )}
+      <SettingsSheet
+        open={settingsOpen}
+        settings={settings}
+        recordCount={records.length}
+        onClose={() => setSettingsOpen(false)}
+        onPatch={patchSettings}
+        onReset={() => setSettings({ ...DEFAULT_SETTINGS })}
+        onClearRecords={() => void clearAllRecords()}
+      />
+    </div>
   )
 }
 

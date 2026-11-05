@@ -8,8 +8,8 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#080a0f",
-  "theme_color": "#080a0f",
+  "background_color": "#090a0e",
+  "theme_color": "#090a0e",
   "categories": ["music", "education", "utilities"],
   "icons": [
     {

@@ -86,6 +86,11 @@ export class PitchCapture {
     return this.mode
   }
 
+  /** 供录音器复用同一条麦克风/共享音频流。 */
+  get mediaStream(): MediaStream | null {
+    return this.stream
+  }
+
   /** 设备报告的输出 + 基础延迟，用于输入延迟补偿的初始值。 */
   get latencyMs(): number {
     const output = Number.isFinite(this.ctx.outputLatency) ? this.ctx.outputLatency : 0
