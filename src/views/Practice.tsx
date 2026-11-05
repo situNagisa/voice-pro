@@ -272,7 +272,7 @@ export function PracticeView({
       player.play(startAt, loop)
       setNow(startAt)
       setPhase('active')
-      setStatusText('正在录音与实时检测')
+      setStatusText('录音与实时检测')
     } catch (err) {
       capture?.stop()
       player?.dispose()
@@ -567,186 +567,190 @@ export function PracticeView({
         </main>
       ) : (
         <main className={`page practice-page ${phase === 'paused' ? 'is-paused' : ''}`}>
-          <section className={`live-readout severity-${displayTone}`}>
-            <div className="live-note-line">
-              <span className="live-note">{displayNote?.label ?? '—'}</span>
-              <span className="live-freq">{displayF0 == null ? '—' : `${displayF0.toFixed(1)} Hz`}</span>
-            </div>
-            <div className="live-cents-line">
-              <strong className={`live-cents ${displayTone}`}>
-                {displayCents == null ? '—' : `${formatCents(displayCents)} 音分`}
-              </strong>
-              {displayDirection !== 0 ? (
-                <span className={`live-direction ${displayTone}`}>
-                  {displayDirection === 1 ? '↑ 偏高' : '↓ 偏低'}
-                </span>
-              ) : (
-                <span className={`status-pill ${displayTone}`}>
-                  {displayCents != null ? '准' : displayNote ? '暂无参考' : '等待声音'}
-                </span>
-              )}
-            </div>
-            <div className="live-target">
-              目标 <strong>{displayTarget?.label ?? '—'}</strong>
-              {displayOctaveHint && <span> · {displayOctaveHint}</span>}
-            </div>
-            <div className="live-clock">
-              {formatTime(now)} <span>/ {formatTime(song.buffer.duration)}</span>
-              {loop && <em>循环中</em>}
-            </div>
-          </section>
-
-          <section className="roll-card card">
-            <PitchRoll
-              melody={song.melody}
-              pointsRef={pointsRef}
-              duration={song.buffer.duration}
-              transpose={effectiveSettings.transpose}
-              octaveAlign={effectiveSettings.octaveAlign}
-              tolerance={effectiveSettings.tolerance}
-              mode="practice"
-              active={phase === 'active'}
-              interactive={phase === 'paused'}
-              getPlayhead={() => pausedAtRef.current ?? playerRef.current?.position ?? 0}
-              getCenter={() => (pausedAtRef.current != null ? centerRef.current : playerRef.current?.position ?? 0)}
-              getCursor={() => cursorRef.current}
-              loop={loop}
-              onPan={panTime}
-              onPick={pickTime}
-              ariaLabel="练唱音高卷帘：白色圆点为点选位置"
-              playheadLabel={phase === 'paused' ? '暂停' : '现在'}
-            />
-            <div className="roll-legend">
-              <span><i className="dot good" />准</span>
-              <span><i className="dot sharp" />偏高 ↑</span>
-              <span><i className="dot flat" />偏低 ↓</span>
-              <span className="legend-spacer" />
-              <span className="desktop-only">横轴时间 · 纵轴音高</span>
-              <span className="mobile-only">{phase === 'active' ? '实时跟随' : '拖动查看 · 点按定位'}</span>
-            </div>
-          </section>
-
-          {phase === 'active' ? (
-            <>
-              {error && <div className="notice warn">{error}</div>}
-              <div className="practice-transport card">
-                <button
-                  type="button"
-                  className="round-btn pause"
-                  aria-label="暂停并回看"
-                  onClick={() => void pauseSession()}
-                >
-                  <PauseIcon />
-                </button>
-                <div className="transport-copy">
-                  <strong>正在跟唱</strong>
-                  <span>{statusText} · 暂停后可拖动查看</span>
-                </div>
-                <button type="button" className="btn ghost end-btn" onClick={() => void finishSession(false)}>
-                  结束
-                </button>
+          <div className="practice-stage">
+            <section className="roll-card card">
+              <PitchRoll
+                melody={song.melody}
+                pointsRef={pointsRef}
+                duration={song.buffer.duration}
+                transpose={effectiveSettings.transpose}
+                octaveAlign={effectiveSettings.octaveAlign}
+                tolerance={effectiveSettings.tolerance}
+                mode="practice"
+                active={phase === 'active'}
+                interactive={phase === 'paused'}
+                getPlayhead={() => pausedAtRef.current ?? playerRef.current?.position ?? 0}
+                getCenter={() => (pausedAtRef.current != null ? centerRef.current : playerRef.current?.position ?? 0)}
+                getCursor={() => cursorRef.current}
+                loop={loop}
+                onPan={panTime}
+                onPick={pickTime}
+                ariaLabel="练唱音高卷帘：白色圆点为点选位置"
+                playheadLabel={phase === 'paused' ? '暂停' : '现在'}
+              />
+              <div className="roll-legend">
+                <span><i className="dot good" />准</span>
+                <span><i className="dot sharp" />偏高 ↑</span>
+                <span><i className="dot flat" />偏低 ↓</span>
+                <span className="legend-spacer" />
+                <span className="desktop-only">横轴时间 · 纵轴音高</span>
+                <span className="mobile-only">{phase === 'active' ? '实时跟随' : '拖动查看 · 点按定位'}</span>
               </div>
-              <div className="volume-inline">
-                <Slider
-                  label="原曲音量"
-                  value={Math.round(settings.volume * 100)}
-                  min={0}
-                  max={100}
-                  onChange={(value) => onPatchSettings({ volume: value / 100 })}
-                  format={(value) => `${value}%`}
-                />
-              </div>
-            </>
-          ) : (
-            <section className="pause-panel card">
-              <div className="pause-head">
-                <div>
-                  <span className="eyebrow">回看</span>
-                  <h2>停下，看看刚才唱到哪</h2>
-                </div>
-                <span className="pause-time">{formatTime(pausedAt ?? now)}</span>
-              </div>
-              <p className="pause-hint">左右拖动卷帘查看历史；点按曲线显示那一刻的音名与偏差。</p>
-
-              {cursor != null ? (
-                selected ? (
-                  <div className={`selection-card severity-${selectedSeverity}`}>
-                    <div className="selection-main">
-                      <strong>{selectedNote?.label ?? '—'}</strong>
-                      <span className={`selection-cents ${selectedSeverity}`}>
-                        {selectedCents == null ? '暂无参考' : `${formatCents(selectedCents)} 音分`}
-                        {selectedDirection !== 0 && (selectedDirection === 1 ? ' ↑ 偏高' : ' ↓ 偏低')}
-                      </span>
-                    </div>
-                    <div className="selection-meta">
-                      <span>{formatTime(cursor)}</span>
-                      <span>目标 {selectedTarget?.label ?? '—'}</span>
-                      <span>{selected.point.f0.toFixed(1)} Hz</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="selection-card empty">
-                    <strong>{formatTime(cursor)} 附近没有检测到人声</strong>
-                    <span>可以再点曲线上的白色圆点，或直接从这里播放原唱。</span>
-                  </div>
-                )
-              ) : (
-                <div className="selection-card empty">
-                  <strong>点一下曲线，定位到某一刻</strong>
-                  <span>拖动只移动视野；点按会落下白色游标。</span>
-                </div>
-              )}
-
-              <div className="replay-block">
-                <div className="replay-head">
-                  <span>从这里回放</span>
-                  <span className="tiny-note">
-                    {snapshotLoading
-                      ? '正在准备录音…'
-                      : voiceReady
-                        ? '可回放你自己的声音'
-                        : '这次还没录到可回放的音频'}
-                  </span>
-                </div>
-                <div className="segmented compact" role="group" aria-label="回放内容">
-                  {REPLAY_LABELS.map((item) => (
-                    <button
-                      key={item.value}
-                      type="button"
-                      aria-pressed={replayMode === item.value}
-                      className={replayMode === item.value ? 'active' : ''}
-                      onClick={() => {
-                        setReplayMode(item.value)
-                        if (replayPlaying) stopReplay()
-                      }}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="replay-actions">
+            </section>
+            {phase === 'active' && (
+              <>
+                {error && <div className="notice warn">{error}</div>}
+                <div className="practice-transport card">
                   <button
                     type="button"
-                    className="btn secondary"
-                    disabled={snapshotLoading || (replayMode !== 'original' && !voiceReady)}
-                    onClick={() => void playReplay()}
+                    className="round-btn pause"
+                    aria-label="暂停并回看"
+                    onClick={() => void pauseSession()}
                   >
-                    {replayPlaying ? <StopIcon /> : <PlayIcon />}
-                    {replayPlaying ? '停止回放' : `播放${replayMode === 'voice' ? '我的声音' : replayMode === 'original' ? '原唱' : '叠加'}`}
+                    <PauseIcon />
                   </button>
-                  <button type="button" className="btn primary" onClick={() => void resumeSession()}>
-                    <PlayIcon />
-                    继续唱
+                  <div className="transport-copy">
+                    <strong>正在跟唱</strong>
+                    <span>{statusText} · 暂停可回看</span>
+                  </div>
+                  <button type="button" className="btn ghost end-btn" onClick={() => void finishSession(false)}>
+                    结束
                   </button>
                 </div>
-              </div>
+                <div className="volume-inline">
+                  <Slider
+                    label="原曲音量"
+                    value={Math.round(settings.volume * 100)}
+                    min={0}
+                    max={100}
+                    onChange={(value) => onPatchSettings({ volume: value / 100 })}
+                    format={(value) => `${value}%`}
+                  />
+                </div>
+              </>
+            )}
+          </div>
 
-              <button type="button" className="btn ghost block end-btn" onClick={() => void finishSession(false)}>
-                结束并保存报告
-              </button>
-              {error && <div className="notice warn">{error}</div>}
+          <aside className="practice-side">
+            <section className={`live-readout severity-${displayTone}`}>
+              <div className="live-note-line">
+                <span className="live-note">{displayNote?.label ?? '—'}</span>
+                <span className="live-freq">{displayF0 == null ? '—' : `${displayF0.toFixed(1)} Hz`}</span>
+              </div>
+              <div className="live-cents-line">
+                <strong className={`live-cents ${displayTone}`}>
+                  {displayCents == null ? '—' : `${formatCents(displayCents)} 音分`}
+                </strong>
+                {displayDirection !== 0 ? (
+                  <span className={`live-direction ${displayTone}`}>
+                    {displayDirection === 1 ? '↑ 偏高' : '↓ 偏低'}
+                  </span>
+                ) : (
+                  <span className={`status-pill ${displayTone}`}>
+                    {displayCents != null ? '准' : displayNote ? '暂无参考' : '等待声音'}
+                  </span>
+                )}
+              </div>
+              <div className="live-target">
+                目标 <strong>{displayTarget?.label ?? '—'}</strong>
+                {displayOctaveHint && <span> · {displayOctaveHint}</span>}
+              </div>
+              <div className="live-clock">
+                {formatTime(now)} <span>/ {formatTime(song.buffer.duration)}</span>
+                {loop && <em>循环中</em>}
+              </div>
             </section>
-          )}
+            {phase !== 'active' && (
+              <section className="pause-panel card">
+                <div className="pause-head">
+                  <div>
+                    <span className="eyebrow">回看</span>
+                    <h2>停下，看看刚才唱到哪</h2>
+                  </div>
+                  <span className="pause-time">{formatTime(pausedAt ?? now)}</span>
+                </div>
+                <p className="pause-hint">左右拖动卷帘查看历史；点按曲线显示那一刻的音名与偏差。</p>
+
+                {cursor != null ? (
+                  selected ? (
+                    <div className={`selection-card severity-${selectedSeverity}`}>
+                      <div className="selection-main">
+                        <strong>{selectedNote?.label ?? '—'}</strong>
+                        <span className={`selection-cents ${selectedSeverity}`}>
+                          {selectedCents == null ? '暂无参考' : `${formatCents(selectedCents)} 音分`}
+                          {selectedDirection !== 0 && (selectedDirection === 1 ? ' ↑ 偏高' : ' ↓ 偏低')}
+                        </span>
+                      </div>
+                      <div className="selection-meta">
+                        <span>{formatTime(cursor)}</span>
+                        <span>目标 {selectedTarget?.label ?? '—'}</span>
+                        <span>{selected.point.f0.toFixed(1)} Hz</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="selection-card empty">
+                      <strong>{formatTime(cursor)} 附近没有检测到人声</strong>
+                      <span>可以再点曲线上的白色圆点，或直接从这里播放原唱。</span>
+                    </div>
+                  )
+                ) : (
+                  <div className="selection-card empty">
+                    <strong>点一下曲线，定位到某一刻</strong>
+                    <span>拖动只移动视野；点按会落下白色游标。</span>
+                  </div>
+                )}
+
+                <div className="replay-block">
+                  <div className="replay-head">
+                    <span>从这里回放</span>
+                    <span className="tiny-note">
+                      {snapshotLoading
+                        ? '正在准备录音…'
+                        : voiceReady
+                          ? '可回放你自己的声音'
+                          : '这次还没录到可回放的音频'}
+                    </span>
+                  </div>
+                  <div className="segmented compact" role="group" aria-label="回放内容">
+                    {REPLAY_LABELS.map((item) => (
+                      <button
+                        key={item.value}
+                        type="button"
+                        aria-pressed={replayMode === item.value}
+                        className={replayMode === item.value ? 'active' : ''}
+                        onClick={() => {
+                          setReplayMode(item.value)
+                          if (replayPlaying) stopReplay()
+                        }}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="replay-actions">
+                    <button
+                      type="button"
+                      className="btn secondary"
+                      disabled={snapshotLoading || (replayMode !== 'original' && !voiceReady)}
+                      onClick={() => void playReplay()}
+                    >
+                      {replayPlaying ? <StopIcon /> : <PlayIcon />}
+                      {replayPlaying ? '停止回放' : `播放${replayMode === 'voice' ? '我的声音' : replayMode === 'original' ? '原唱' : '叠加'}`}
+                    </button>
+                    <button type="button" className="btn primary" onClick={() => void resumeSession()}>
+                      <PlayIcon />
+                      继续唱
+                    </button>
+                  </div>
+                </div>
+
+                <button type="button" className="btn ghost block end-btn" onClick={() => void finishSession(false)}>
+                  结束并保存报告
+                </button>
+                {error && <div className="notice warn">{error}</div>}
+              </section>
+            )}
+          </aside>
 
           {loop && (
             <div className="loop-note">

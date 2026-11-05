@@ -20,14 +20,22 @@
 
 .practice-screen,
 .report-screen,
-.review-screen {
-  max-width: var(--stage-w);
+.review-screen,
+.prep-screen {
   padding-bottom: calc(var(--safe-bottom) + 28px);
 }
 
-.prep-screen {
-  max-width: 760px;
-  padding-bottom: calc(var(--safe-bottom) + 28px);
+/* 宽屏两栏布局的分组容器；手机上透明展开，保持原有单列顺序 */
+.practice-stage,
+.practice-side,
+.tuner-stage,
+.tuner-side {
+  display: contents;
+}
+
+.live-readout,
+.tuner-card {
+  order: -1;
 }
 
 .page {
@@ -340,14 +348,16 @@ input[type='range'] {
 }
 
 .segmented button.active {
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-  box-shadow: inset 0 0 0 1px var(--accent-line);
+  background: rgba(143, 125, 255, 0.28);
+  color: var(--text);
+  box-shadow:
+    inset 0 0 0 1px var(--accent-strong),
+    0 6px 18px -12px rgba(143, 125, 255, 0.9);
 }
 
 .segmented button.active small {
   color: var(--accent-strong);
-  opacity: 0.7;
+  opacity: 1;
 }
 
 .segmented button:disabled {
@@ -1570,7 +1580,7 @@ input[type='range'] {
   height: 244px;
   overflow: hidden;
   border-radius: 12px;
-  background: #090b10;
+  background: #10141c;
 }
 
 .pitch-roll canvas {
@@ -1663,11 +1673,11 @@ input[type='range'] {
 }
 
 .transport-copy span {
-  overflow: hidden;
   color: var(--text-3);
-  font-size: 10.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .end-btn {
@@ -2976,6 +2986,115 @@ input[type='range'] {
 
   .settings-sheet {
     width: 400px;
+  }
+}
+
+@media (min-width: 1024px) {
+  /* 练唱 / 音准仪：卷帘占主区域，音名卡与回看面板放侧栏 */
+  .practice-page,
+  .tuner-page {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    align-items: start;
+    column-gap: 20px;
+    row-gap: 14px;
+  }
+
+  .practice-stage,
+  .practice-side,
+  .tuner-stage,
+  .tuner-side {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .practice-page .loop-note,
+  .tuner-page > .notice,
+  .tuner-page > .tiny-note {
+    grid-column: 1 / -1;
+  }
+
+  .pitch-roll {
+    height: 400px;
+  }
+
+  .practice-transport {
+    position: static;
+  }
+
+  .tuner-card {
+    gap: 16px;
+    padding: 20px;
+  }
+
+  .tuner-note {
+    font-size: 96px;
+  }
+
+  .live-readout {
+    padding: 20px;
+  }
+
+  .live-note {
+    font-size: 72px;
+  }
+
+  .pause-panel {
+    padding: 18px;
+  }
+
+  /* 首页示例歌改多列网格 */
+  .demo-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .demo-card {
+    align-items: flex-start;
+    height: 100%;
+  }
+
+  .demo-action {
+    align-self: center;
+  }
+
+  .import-card {
+    min-height: 92px;
+  }
+
+  /* 准备页：歌曲信息在左，开始卡片在右 */
+  .prep-page {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 440px;
+    align-items: start;
+    column-gap: 24px;
+  }
+
+  .prep-page .song-hero {
+    grid-column: 1;
+  }
+
+  .prep-page .notice {
+    grid-column: 1;
+  }
+
+  .prep-page .prep-card {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+  }
+
+  /* 记录与报告在宽屏下用两列 */
+  .record-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .report-page .phrase-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

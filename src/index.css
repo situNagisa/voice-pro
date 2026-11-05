@@ -62,8 +62,7 @@
   --r-pill: 999px;
 
   /* 布局 */
-  --content-w: 720px;
-  --stage-w: 920px;
+  --content-w: 1160px;
   --tabbar-h: 62px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);

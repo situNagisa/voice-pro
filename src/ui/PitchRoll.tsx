@@ -42,11 +42,13 @@ const COLORS = {
 } as const
 
 const BLACK_KEYS = [1, 3, 6, 8, 10]
-const WHITE_KEY = '#d9dee8'
-const BLACK_KEY = '#171a22'
-const BAR_FILL = 'rgba(143, 125, 255, 0.16)'
-const BAR_STROKE = 'rgba(169, 156, 255, 0.6)'
+const WHITE_KEY = '#e2e7f1'
+const BLACK_KEY = '#1b2029'
+const BAR_FILL = 'rgba(143, 125, 255, 0.28)'
+const BAR_STROKE = 'rgba(184, 173, 255, 0.85)'
 const ACCENT = '#8f7dff'
+/** 底部时间刻度条带高度，与曲线绘制区完全分开 */
+const TIME_BAND = 22
 
 function quantile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0
@@ -139,7 +141,7 @@ export function PitchRoll(props: PitchRollProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const rafRef = useRef(0)
   const sizeRef = useRef({ width: 0, height: 0 })
-  const freeRangeRef = useRef({ lo: 45, hi: 81 })
+  const freeRangeRef = useRef({ lo: 48, hi: 74 })
   const pointerRef = useRef<{
     id: number
     startX: number
@@ -189,11 +191,11 @@ export function PitchRoll(props: PitchRollProps) {
       if (!context || width < 2 || height < 2) return
       const p = propsRef.current
       const points = p.pointsRef.current
-      const gutter = width < 480 ? 32 : 44
+      const gutter = width < 480 ? 34 : 48
       const plotLeft = gutter
       const plotWidth = width - gutter
       const plotTop = 10
-      const plotBottom = height - 18
+      const plotBottom = Math.max(plotTop + 24, height - TIME_BAND)
       const plotHeight = Math.max(20, plotBottom - plotTop)
       const centerX = plotLeft + plotWidth / 2
       const pps = width < 540 ? 54 : clamp(plotWidth / 9, 72, 120)
@@ -244,8 +246,8 @@ export function PitchRoll(props: PitchRollProps) {
 
       context.clearRect(0, 0, width, height)
       const background = context.createLinearGradient(0, 0, 0, height)
-      background.addColorStop(0, '#0c0e14')
-      background.addColorStop(1, '#090b10')
+      background.addColorStop(0, '#12161f')
+      background.addColorStop(1, '#0c1017')
       context.fillStyle = background
       context.fillRect(0, 0, width, height)
 
@@ -259,10 +261,10 @@ export function PitchRoll(props: PitchRollProps) {
         const yCenter = yFor(midi)
         const yTop = yCenter - rowHeight / 2
         if (isBlack) {
-          context.fillStyle = 'rgba(255,255,255,0.022)'
+          context.fillStyle = 'rgba(255,255,255,0.05)'
           context.fillRect(plotLeft, yTop, plotWidth, rowHeight)
         }
-        context.strokeStyle = pitchClass === 0 ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.032)'
+        context.strokeStyle = pitchClass === 0 ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.085)'
         context.lineWidth = 1
         context.beginPath()
         context.moveTo(plotLeft, Math.round(yTop) + 0.5)
@@ -270,15 +272,15 @@ export function PitchRoll(props: PitchRollProps) {
         context.stroke()
       }
 
-      // 钢琴键
+      // 钢琴键：只铺到时间条带上沿，音名最小 11px
       context.fillStyle = '#0b0d13'
-      context.fillRect(0, 0, gutter, height)
+      context.fillRect(0, 0, gutter, plotBottom)
       for (let midi = minMidi; midi <= maxMidi; midi++) {
         const pitchClass = ((midi % 12) + 12) % 12
         const isBlack = BLACK_KEYS.includes(pitchClass)
         const yCenter = yFor(midi)
         const yTop = Math.max(0, yCenter - rowHeight / 2)
-        const yBottom = Math.min(height, yCenter + rowHeight / 2)
+        const yBottom = Math.min(plotBottom, yCenter + rowHeight / 2)
         const rowH = yBottom - yTop
         if (rowH <= 0) continue
         context.fillStyle = isBlack ? BLACK_KEY : WHITE_KEY
@@ -288,47 +290,42 @@ export function PitchRoll(props: PitchRollProps) {
           context.fillRect(gutter - 7, yTop, 6, rowH)
         }
         const name = midiToNoteName(midi)
-        const showLabel = pitchClass === 0 || (rowHeight >= 14 && !isBlack) || (rowHeight >= 18 && isBlack)
-        if (showLabel && rowH >= 7) {
-          context.fillStyle = isBlack ? '#6d7688' : '#2a2f3a'
-          const fontSize = Math.min(10, Math.max(7, rowH * 0.6))
+        const showLabel =
+          yCenter < plotBottom - 7 &&
+          (pitchClass === 0 || (rowH >= 11.5 && !isBlack) || (rowH >= 20 && isBlack))
+        if (showLabel) {
+          context.fillStyle = isBlack ? '#7c8698' : '#202633'
+          const fontSize = Math.round(clamp(rowH * 0.72, 11, 12))
           context.font = `${pitchClass === 0 ? '700' : '600'} ${fontSize}px system-ui, -apple-system, "PingFang SC", sans-serif`
           context.textAlign = 'left'
           context.textBaseline = 'middle'
           context.fillText(name.label, 5, yCenter)
         }
       }
-      context.strokeStyle = 'rgba(255,255,255,0.12)'
+      context.strokeStyle = 'rgba(255,255,255,0.16)'
       context.beginPath()
       context.moveTo(plotLeft + 0.5, 0)
-      context.lineTo(plotLeft + 0.5, height)
+      context.lineTo(plotLeft + 0.5, plotBottom)
       context.stroke()
 
       context.save()
       context.beginPath()
-      context.rect(plotLeft, 0, plotWidth, height)
+      context.rect(plotLeft, 0, plotWidth, plotBottom)
       context.clip()
 
-      // 时间网格与刻度
+      // 时间网格（文字刻度留到最后画在底部条带里）
       const tickStep = pps >= 90 ? 1 : pps >= 45 ? 2 : 5
       const firstTick = Math.ceil(visibleStart / tickStep) * tickStep
-      context.font = '10px ui-monospace, SFMono-Regular, Menlo, monospace'
-      context.textAlign = 'center'
-      context.textBaseline = 'bottom'
       for (let t = firstTick; t <= visibleEnd; t += tickStep) {
         if (t < 0) continue
         if (p.duration > 0 && t > p.duration + 0.5) continue
         const x = xFor(t)
         if (x < plotLeft + 8) continue
-        context.strokeStyle = 'rgba(255,255,255,0.04)'
+        context.strokeStyle = 'rgba(255,255,255,0.06)'
         context.beginPath()
         context.moveTo(Math.round(x) + 0.5, plotTop)
         context.lineTo(Math.round(x) + 0.5, plotBottom)
         context.stroke()
-        const m = Math.floor(t / 60)
-        const sec = Math.floor(t % 60)
-        context.fillStyle = 'rgba(180,192,214,0.4)'
-        context.fillText(`${m}:${sec.toString().padStart(2, '0')}`, x, height - 3)
       }
 
       // 乐句高亮
@@ -372,8 +369,8 @@ export function PitchRoll(props: PitchRollProps) {
           const rectWidth = Math.max(3, x2 - x1)
           const active = playhead >= note.start - 0.02 && playhead <= note.end + 0.02
           const gradient = context.createLinearGradient(0, yCenter - blockHeight / 2, 0, yCenter + blockHeight / 2)
-          gradient.addColorStop(0, active ? 'rgba(169,156,255,0.42)' : BAR_FILL)
-          gradient.addColorStop(1, active ? 'rgba(143,125,255,0.22)' : 'rgba(143,125,255,0.1)')
+          gradient.addColorStop(0, active ? 'rgba(190,179,255,0.62)' : BAR_FILL)
+          gradient.addColorStop(1, active ? 'rgba(143,125,255,0.34)' : 'rgba(143,125,255,0.18)')
           roundRect(context, x1, yCenter - blockHeight / 2, rectWidth, blockHeight, Math.min(4, blockHeight / 2))
           context.fillStyle = gradient
           context.fill()
@@ -440,9 +437,9 @@ export function PitchRoll(props: PitchRollProps) {
           Math.abs(x - previous.x) < pps * 0.4
         ) {
           context.strokeStyle = color
-          context.lineWidth = 2.4
+          context.lineWidth = 2.8
           context.shadowColor = color
-          context.shadowBlur = 6
+          context.shadowBlur = 9
           context.beginPath()
           context.moveTo(previous.x, previous.y)
           const midX = (previous.x + x) / 2
@@ -547,6 +544,46 @@ export function PitchRoll(props: PitchRollProps) {
       }
 
       context.restore()
+
+      // 底部时间条带：刻度独立成带，不会被用户音高点盖住
+      const bandTop = plotBottom
+      const bandHeight = height - bandTop
+      context.fillStyle = 'rgba(8, 10, 15, 0.94)'
+      context.fillRect(0, bandTop, width, bandHeight)
+      context.strokeStyle = 'rgba(255,255,255,0.1)'
+      context.beginPath()
+      context.moveTo(0, bandTop + 0.5)
+      context.lineTo(width, bandTop + 0.5)
+      context.stroke()
+
+      context.save()
+      context.beginPath()
+      context.rect(plotLeft, bandTop, plotWidth, bandHeight)
+      context.clip()
+      context.font = '500 11px ui-monospace, SFMono-Regular, Menlo, monospace'
+      context.textAlign = 'center'
+      context.textBaseline = 'middle'
+      for (let t = firstTick; t <= visibleEnd; t += tickStep) {
+        if (t < 0) continue
+        if (p.duration > 0 && t > p.duration + 0.5) continue
+        const x = xFor(t)
+        if (x < plotLeft + 16 || x > width - 18) continue
+        const rounded = Math.round(x) + 0.5
+        context.strokeStyle = 'rgba(255,255,255,0.18)'
+        context.beginPath()
+        context.moveTo(rounded, bandTop + 1)
+        context.lineTo(rounded, bandTop + 5)
+        context.stroke()
+        const m = Math.floor(t / 60)
+        const sec = Math.floor(t % 60)
+        context.fillStyle = 'rgba(203,213,230,0.72)'
+        context.fillText(
+          `${m}:${sec.toString().padStart(2, '0')}`,
+          x,
+          bandTop + bandHeight / 2 + 1.5,
+        )
+      }
+      context.restore()
     }
 
     return () => {
@@ -560,7 +597,7 @@ export function PitchRoll(props: PitchRollProps) {
     if (!canvas) return 0
     const rect = canvas.getBoundingClientRect()
     const width = rect.width
-    const gutter = width < 480 ? 32 : 44
+    const gutter = width < 480 ? 34 : 48
     const plotLeft = gutter
     const plotWidth = Math.max(1, width - gutter)
     const pps = width < 540 ? 54 : clamp(plotWidth / 9, 72, 120)
@@ -590,7 +627,7 @@ export function PitchRoll(props: PitchRollProps) {
     if (pointer.moved && props.onPan) {
       const canvas = canvasRef.current
       const width = canvas?.getBoundingClientRect().width ?? 390
-      const gutter = width < 480 ? 32 : 44
+      const gutter = width < 480 ? 34 : 48
       const plotWidth = Math.max(1, width - gutter)
       const pps = width < 540 ? 54 : clamp(plotWidth / 9, 72, 120)
       if (delta !== 0) props.onPan(-delta / pps)
