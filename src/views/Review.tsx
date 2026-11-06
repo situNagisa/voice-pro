@@ -10,6 +10,7 @@ import type { PracticeRecord } from '../state/records'
 import { Notice, TopBar } from '../ui/controls'
 import { PauseIcon, PlayIcon, RefreshIcon, StopIcon } from '../ui/icons'
 import { PitchRoll } from '../ui/PitchRoll'
+import { useIsDesktop } from '../ui/useMediaQuery'
 
 interface ReviewViewProps {
   record: PracticeRecord
@@ -42,6 +43,7 @@ function scoreTone(score: number | null): string {
 }
 
 export function ReviewView({ record, original, startAt, onBack }: ReviewViewProps) {
+  const isDesktop = useIsDesktop()
   const pointsRef = useRef(
     record.points.slice().sort((a, b) => a.t - b.t),
   )
@@ -139,9 +141,11 @@ export function ReviewView({ record, original, startAt, onBack }: ReviewViewProp
   }, [record])
 
   useEffect(() => {
-    const initial = Math.max(0, Math.min(startAt, melody.duration || record.duration))
+    const duration = melody.duration || record.duration
+    const initial = Math.max(0, Math.min(startAt, duration))
     cursorRef.current = initial
-    centerRef.current = initial
+    // 桌面卷帘窗口更宽，起点在 0 时把视野右移，避免左半屏空着
+    centerRef.current = isDesktop ? Math.min(duration, Math.max(7, initial)) : initial
     setCursor(initial)
     setSelected(
       readingAt(pointsRef.current, initial, melody, {
@@ -263,6 +267,36 @@ export function ReviewView({ record, original, startAt, onBack }: ReviewViewProp
     : mode === 'mix'
       ? voiceReady || originalBuffer != null
       : voiceReady
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.repeat) return
+      if (document.querySelector('.settings-sheet')) return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
+      if (event.code === 'Space') {
+        if (target?.closest('button')) return
+        event.preventDefault()
+        void togglePlayback()
+      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault()
+        const delta = (event.shiftKey ? 5 : 1) * (event.key === 'ArrowLeft' ? -1 : 1)
+        const duration = originalBuffer?.duration ?? melody.duration ?? record.duration
+        const base = cursorRef.current ?? startAt
+        const next = Math.max(0, Math.min(duration, base + delta))
+        centerRef.current = next
+        pickTime(next)
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        stopPlayback()
+        onBack()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // 快捷键依赖当前回放状态与来源
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, mode, voiceReady, originalBuffer, startAt])
 
   return (
     <div className="screen review-screen">
@@ -390,6 +424,7 @@ export function ReviewView({ record, original, startAt, onBack }: ReviewViewProp
               停止
             </button>
             <span className="review-clock">{cursor == null ? '0:00' : formatTime(cursor)}</span>
+            <span className="key-hints desktop-only">空格 播放/暂停 · ← → 移动游标 · Esc 返回</span>
           </div>
           {!voiceReady && record.voice && !voiceError && (
             <p className="tiny-note">正在解码录音…</p>

@@ -413,6 +413,19 @@ export function PracticeView({
     centerRef.current = Math.max(0, Math.min(duration, centerRef.current + delta))
   }
 
+  function scrubTo(time: number): void {
+    const duration = song.buffer.duration
+    const next = Math.max(0, Math.min(duration, time))
+    if (phase === 'active') {
+      playerRef.current?.seek(next)
+      centerRef.current = next
+      setNow(next)
+    } else if (phase === 'paused') {
+      centerRef.current = next
+      pickTime(next)
+    }
+  }
+
   async function finishSession(auto: boolean): Promise<void> {
     if (finishingRef.current) return
     finishingRef.current = true
@@ -533,13 +546,53 @@ export function PracticeView({
   const displayF0 = pausedSelection ? selected?.point.f0 ?? null : current?.f0 ?? null
   const displayOctaveHint = pausedSelection ? null : octaveHint
 
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.repeat) return
+      if (document.querySelector('.settings-sheet')) return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
+      if (event.code === 'Space') {
+        // 焦点在按钮上时交给按钮自己处理空格
+        if (target?.closest('button')) return
+        if (phase === 'active') {
+          event.preventDefault()
+          void pauseSession()
+        } else if (phase === 'paused') {
+          event.preventDefault()
+          void resumeSession()
+        }
+      } else if (event.key === 'Escape') {
+        if (phase === 'ending') return
+        event.preventDefault()
+        confirmBack()
+      } else if (phase === 'paused' && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+        event.preventDefault()
+        const delta = (event.shiftKey ? 5 : 1) * (event.key === 'ArrowLeft' ? -1 : 1)
+        const base = cursorRef.current ?? pausedAtRef.current ?? 0
+        const next = Math.max(0, Math.min(song.buffer.duration, base + delta))
+        centerRef.current = next
+        pickTime(next)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // 快捷键只依赖当前阶段；处理函数内部使用 ref 读取最新位置
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase])
+
   return (
     <div className="screen practice-screen">
       <TopBar
         title={song.name}
         subtitle={showPaused ? '已暂停 · 可回看' : '实时练唱'}
         onBack={confirmBack}
-        right={<span className="tag">±{effectiveSettings.tolerance}</span>}
+        right={
+          <div className="topbar-tools">
+            <span className="key-hints desktop-only">空格 暂停/继续 · Esc 返回</span>
+            <span className="tag">±{effectiveSettings.tolerance}</span>
+          </div>
+        }
       />
 
       {phase === 'error' ? (
@@ -751,6 +804,101 @@ export function PracticeView({
               </section>
             )}
           </aside>
+
+          <section className="desktop-transport practice-dock" aria-label="练唱控制">
+            <div className="dock-main">
+              <button
+                type="button"
+                className="round-btn dock-primary"
+                aria-label={phase === 'active' ? '暂停并回看' : '继续唱'}
+                disabled={phase === 'starting'}
+                onClick={() => {
+                  if (phase === 'active') void pauseSession()
+                  else if (phase === 'paused') void resumeSession()
+                }}
+              >
+                {phase === 'active' ? <PauseIcon /> : <PlayIcon />}
+              </button>
+              <span className="dock-time">
+                {formatTime(phase === 'active' ? now : cursor ?? pausedAt ?? 0)}
+              </span>
+              <input
+                type="range"
+                className="dock-scrubber"
+                aria-label="时间轴"
+                min={0}
+                max={Math.max(0.1, song.buffer.duration)}
+                step={0.1}
+                value={phase === 'active' ? now : cursor ?? pausedAt ?? 0}
+                disabled={phase === 'starting'}
+                onChange={(event) => scrubTo(Number(event.target.value))}
+              />
+              <span className="dock-time dim">{formatTime(song.buffer.duration)}</span>
+
+              <div className="segmented compact dock-modes" role="group" aria-label="回放内容">
+                {REPLAY_LABELS.map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    aria-pressed={replayMode === item.value}
+                    className={replayMode === item.value ? 'active' : ''}
+                    disabled={phase !== 'paused' || snapshotLoading || (item.value !== 'original' && !voiceReady)}
+                    onClick={() => {
+                      setReplayMode(item.value)
+                      if (replayPlaying) stopReplay()
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                className="btn secondary dock-replay"
+                disabled={phase !== 'paused' || snapshotLoading || (replayMode !== 'original' && !voiceReady)}
+                onClick={() => void playReplay()}
+              >
+                {replayPlaying ? <StopIcon /> : <PlayIcon />}
+                {replayPlaying ? '停止' : '回放'}
+              </button>
+
+              <button
+                type="button"
+                className="btn primary dock-end"
+                onClick={() => void finishSession(false)}
+              >
+                结束
+              </button>
+            </div>
+
+            <div className="dock-sub">
+              <span className={`dock-selection severity-${displayTone}`}>
+                {cursor != null
+                  ? selected
+                    ? `${selectedNote?.label ?? '—'} · ${selectedCents == null ? '暂无参考' : `${formatCents(selectedCents)} 音分`} · ${formatTime(cursor)}`
+                    : `${formatTime(cursor)} 附近没有检测到人声`
+                  : showPaused
+                    ? '拖动时间轴或点选卷帘回看'
+                    : '正在跟唱 · 暂停后可回看'}
+              </span>
+              <label className="dock-volume">
+                <span>原曲音量</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={Math.round(settings.volume * 100)}
+                  onChange={(event) => onPatchSettings({ volume: Number(event.target.value) / 100 })}
+                />
+                <span>{Math.round(settings.volume * 100)}%</span>
+              </label>
+              {error && <span className="dock-error">{error}</span>}
+              <span className="key-hints">
+                空格 暂停/继续 · ← → 移动游标 · Esc 返回 · 滚轮缩放
+              </span>
+            </div>
+          </section>
 
           {loop && (
             <div className="loop-note">

@@ -13,6 +13,7 @@ import type { Settings } from './state/settings'
 import { BottomNav } from './ui/BottomNav'
 import type { TabKey } from './ui/BottomNav'
 import { SettingsSheet } from './ui/SettingsSheet'
+import { SideNav } from './ui/SideNav'
 import { PrepView } from './views/PrepView'
 import { PracticeView } from './views/Practice'
 import type { PracticeResult } from './views/Practice'
@@ -142,6 +143,27 @@ function App() {
     void refreshRecords()
   }
 
+  function navigate(tabKey: TabKey): void {
+    setOverlay(null)
+    setTab(tabKey)
+  }
+
+  useEffect(() => {
+    // Esc 返回：练唱与回看页各自处理（需要先确认/停止播放），这里管准备页与报告页。
+    if (!overlay || settingsOpen) return
+    if (overlay.kind === 'practice' || overlay.kind === 'review') return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
+      event.preventDefault()
+      setOverlay(null)
+      void refreshRecords()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [overlay, settingsOpen])
+
   let content
   if (overlay?.kind === 'prep') {
     content = (
@@ -215,13 +237,16 @@ function App() {
 
   return (
     <div className={`app-shell ${overlay ? 'has-overlay' : ''}`}>
-      {content}
-      {openingRecord && (
-        <div className="boot-overlay">
-          <div className="spinner large" />
-          <span>正在读取记录…</span>
-        </div>
-      )}
+      <SideNav active={tab} onNavigate={navigate} onOpenSettings={() => setSettingsOpen(true)} />
+      <div className="app-main">
+        {content}
+        {openingRecord && (
+          <div className="boot-overlay">
+            <div className="spinner large" />
+            <span>正在读取记录…</span>
+          </div>
+        )}
+      </div>
       <SettingsSheet
         open={settingsOpen}
         settings={settings}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { DragEvent, KeyboardEvent } from 'react'
+import type { DragEvent as ReactDragEvent, KeyboardEvent } from 'react'
 import { extractMelodyWithFallback } from '../audio/extract'
 import { formatDuration, isSecureAudioContext } from '../audio/pitch'
 import { listDemoSongs } from '../demo'
@@ -40,7 +40,9 @@ export function SongsHome({ settings, onSong, onOpenSettings }: SongsHomeProps) 
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [windowDragging, setWindowDragging] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
+  const dragDepthRef = useRef(0)
   const abortRef = useRef<AbortController | null>(null)
   const mountedRef = useRef(true)
   const secure = isSecureAudioContext()
@@ -142,8 +144,11 @@ export function SongsHome({ settings, onSong, onOpenSettings }: SongsHomeProps) 
     setStage('')
   }
 
-  function onDrop(event: DragEvent<HTMLDivElement>): void {
+  function onDrop(event: ReactDragEvent<HTMLDivElement>): void {
     event.preventDefault()
+    event.stopPropagation()
+    dragDepthRef.current = 0
+    setWindowDragging(false)
     setDragging(false)
     const file = event.dataTransfer.files?.[0]
     if (file) void handleFile(file)
@@ -155,6 +160,49 @@ export function SongsHome({ settings, onSong, onOpenSettings }: SongsHomeProps) 
       if (!busy) fileRef.current?.click()
     }
   }
+
+  useEffect(() => {
+    // 桌面端：把音频拖到窗口任意位置都能导入
+    const hasFiles = (event: DragEvent) =>
+      Array.from(event.dataTransfer?.types ?? []).includes('Files')
+
+    const onDragEnter = (event: DragEvent) => {
+      if (!hasFiles(event)) return
+      event.preventDefault()
+      dragDepthRef.current += 1
+      setWindowDragging(true)
+    }
+    const onDragOver = (event: DragEvent) => {
+      if (!hasFiles(event)) return
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+    }
+    const onDragLeave = (event: DragEvent) => {
+      if (!hasFiles(event)) return
+      dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+      if (dragDepthRef.current === 0) setWindowDragging(false)
+    }
+    const onDrop = (event: DragEvent) => {
+      if (!hasFiles(event)) return
+      event.preventDefault()
+      dragDepthRef.current = 0
+      setWindowDragging(false)
+      setDragging(false)
+      const file = event.dataTransfer?.files?.[0]
+      if (file) void handleFile(file)
+    }
+
+    document.addEventListener('dragenter', onDragEnter)
+    document.addEventListener('dragover', onDragOver)
+    document.addEventListener('dragleave', onDragLeave)
+    document.addEventListener('drop', onDrop)
+    return () => {
+      document.removeEventListener('dragenter', onDragEnter)
+      document.removeEventListener('dragover', onDragOver)
+      document.removeEventListener('dragleave', onDragLeave)
+      document.removeEventListener('drop', onDrop)
+    }
+  })
 
   return (
     <div className="screen home-screen">
@@ -168,6 +216,23 @@ export function SongsHome({ settings, onSong, onOpenSettings }: SongsHomeProps) 
         </div>
         <button type="button" className="icon-btn" aria-label="打开设置" onClick={onOpenSettings}>
           <SettingsIcon />
+        </button>
+      </header>
+
+      <header className="home-desktop-head">
+        <div>
+          <p className="eyebrow">桌面工作区</p>
+          <h1>练歌</h1>
+          <p>选一首歌开始跟唱，或者把音频文件直接拖进窗口。</p>
+        </div>
+        <button
+          type="button"
+          className="btn secondary"
+          disabled={busy || demoBusy != null}
+          onClick={() => fileRef.current?.click()}
+        >
+          <UploadIcon />
+          导入音频
         </button>
       </header>
 
@@ -285,6 +350,16 @@ export function SongsHome({ settings, onSong, onOpenSettings }: SongsHomeProps) 
           所有音频与录音都在本机处理，不会上传。练习记录保存在设备的 IndexedDB 中。
         </p>
       </main>
+
+      {windowDragging && (
+        <div className="drop-overlay" aria-hidden="true">
+          <div className="drop-overlay-inner">
+            <span className="drop-overlay-icon"><UploadIcon /></span>
+            <strong>松开即可导入歌曲</strong>
+            <span>mp3 · m4a · wav · flac · ogg</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

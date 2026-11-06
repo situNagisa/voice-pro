@@ -1,8 +1,8 @@
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { PointerEvent as ReactPointerEvent, RefObject } from 'react'
 import { compareToTarget, referenceMidiAt } from '../audio/analysis'
 import type { RawUserPoint } from '../audio/analysis'
-import { centsFromNearestNote, clamp, freqToMidi, midiToNoteName } from '../audio/pitch'
+import { centsFromNearestNote, clamp, formatCents, freqToMidi, midiToNoteName } from '../audio/pitch'
 import type { ReferenceMelody } from '../core/types'
 
 export interface PitchRollProps {
@@ -28,6 +28,10 @@ export interface PitchRollProps {
   ariaLabel?: string
   /** 播放头徽标文字，默认“现在”；回看页可改成“回看” */
   playheadLabel?: string
+  /** 滚轮缩放时间轴，默认开启 */
+  zoomable?: boolean
+  /** 鼠标悬停显示该点音名与偏差，默认开启 */
+  hoverable?: boolean
 }
 
 interface DrawProps extends PitchRollProps {
@@ -127,6 +131,15 @@ function lowerBound(points: RawUserPoint[], time: number): number {
   return lo
 }
 
+/** 与手机的 9 秒窗口相比，桌面显示 14 秒，让卷帘更像编辑器 */
+function basePpsFor(width: number): number {
+  const gutter = width < 480 ? 34 : 48
+  const plotWidth = Math.max(1, width - gutter)
+  if (width < 540) return 54
+  const seconds = width < 900 ? 10 : 14
+  return clamp(plotWidth / seconds, 42, 112)
+}
+
 function nearest(points: RawUserPoint[], time: number): RawUserPoint | null {
   if (points.length === 0) return null
   let index = lowerBound(points, time)
@@ -142,6 +155,8 @@ export function PitchRoll(props: PitchRollProps) {
   const rafRef = useRef(0)
   const sizeRef = useRef({ width: 0, height: 0 })
   const freeRangeRef = useRef({ lo: 48, hi: 74 })
+  const zoomRef = useRef(1)
+  const hoverRef = useRef<{ time: number; x: number; y: number } | null>(null)
   const pointerRef = useRef<{
     id: number
     startX: number
@@ -198,7 +213,7 @@ export function PitchRoll(props: PitchRollProps) {
       const plotBottom = Math.max(plotTop + 24, height - TIME_BAND)
       const plotHeight = Math.max(20, plotBottom - plotTop)
       const centerX = plotLeft + plotWidth / 2
-      const pps = width < 540 ? 54 : clamp(plotWidth / 9, 72, 120)
+      const pps = basePpsFor(width) * zoomRef.current
 
       let playhead = p.getPlayhead()
       if (!Number.isFinite(playhead)) playhead = 0
@@ -535,6 +550,93 @@ export function PitchRoll(props: PitchRollProps) {
         }
       }
 
+      // 鼠标悬停：在卷帘上直接读出该点的音名与偏差
+      const hover = hoverRef.current
+      if (p.hoverable !== false && hover) {
+        const hoverTime = p.duration > 0 ? clamp(hover.time, 0, p.duration) : hover.time
+        if (
+          hoverTime >= visibleStart &&
+          hoverTime <= visibleEnd &&
+          hover.x >= plotLeft &&
+          hover.x <= width &&
+          hover.y >= plotTop &&
+          hover.y <= plotBottom
+        ) {
+          const point = nearest(points, hoverTime)
+          if (point && Math.abs(point.t - hoverTime) < 0.8) {
+            let hoverMidi = point.midi
+            let cents: number | null = null
+            if (p.mode === 'free') {
+              cents = centsFromNearestNote(point.midi)
+            } else if (p.melody) {
+              const target = referenceMidiAt(p.melody, point.t, p.transpose)
+              if (target != null) {
+                const comparison = compareToTarget(point.midi, target, p.octaveAlign, p.tolerance)
+                cents = comparison.cents
+                hoverMidi = point.midi + comparison.octaveShift * 12
+              }
+            }
+            const toneColor =
+              cents == null
+                ? COLORS.neutral
+                : Math.abs(cents) <= p.tolerance
+                  ? COLORS.good
+                  : cents > 0
+                    ? COLORS.sharp
+                    : COLORS.flat
+            const detail =
+              cents == null
+                ? '暂无参考'
+                : Math.abs(cents) <= p.tolerance
+                  ? `${formatCents(cents)} 音分 · 准`
+                  : `${formatCents(cents)} 音分 ${cents > 0 ? '↑' : '↓'}`
+            const note = midiToNoteName(hoverMidi)
+            const px = xFor(point.t)
+            const py = yFor(hoverMidi)
+
+            context.strokeStyle = 'rgba(242,244,249,0.28)'
+            context.lineWidth = 1
+            context.setLineDash([2, 4])
+            context.beginPath()
+            context.moveTo(px, plotTop)
+            context.lineTo(px, plotBottom)
+            context.stroke()
+            context.setLineDash([])
+
+            context.fillStyle = '#f2f4f9'
+            context.beginPath()
+            context.arc(px, py, 4.4, 0, Math.PI * 2)
+            context.fill()
+            context.fillStyle = toneColor
+            context.beginPath()
+            context.arc(px, py, 2.4, 0, Math.PI * 2)
+            context.fill()
+
+            const text = `${note.label} · ${detail}`
+            context.font = '600 11.5px system-ui, -apple-system, "PingFang SC", sans-serif'
+            const textWidth = context.measureText(text).width
+            const boxHeight = 24
+            const boxWidth = textWidth + 30
+            const boxX = clamp(px + 12, plotLeft + 4, width - boxWidth - 6)
+            const boxY = clamp(py - 36, plotTop + 4, plotBottom - boxHeight - 4)
+            roundRect(context, boxX, boxY, boxWidth, boxHeight, 8)
+            context.fillStyle = 'rgba(8, 10, 16, 0.94)'
+            context.fill()
+            context.strokeStyle = 'rgba(255,255,255,0.16)'
+            context.lineWidth = 1
+            context.stroke()
+            context.fillStyle = toneColor
+            context.beginPath()
+            context.arc(boxX + 11, boxY + boxHeight / 2, 3.2, 0, Math.PI * 2)
+            context.fill()
+            context.fillStyle = '#e9edf6'
+            context.textAlign = 'left'
+            context.textBaseline = 'middle'
+            context.fillText(text, boxX + 19, boxY + boxHeight / 2 + 0.5)
+          }
+        }
+      }
+
       if (points.length === 0 && p.active) {
         context.fillStyle = 'rgba(200,211,231,0.4)'
         context.font = '13px system-ui, -apple-system, "PingFang SC", sans-serif'
@@ -592,6 +694,20 @@ export function PitchRoll(props: PitchRollProps) {
     }
   }, [])
 
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const onWheel = (event: WheelEvent) => {
+      if (propsRef.current.zoomable === false) return
+      event.preventDefault()
+      const factor = Math.exp(-event.deltaY * 0.0018)
+      zoomRef.current = clamp(zoomRef.current * factor, 0.4, 3.5)
+      hoverRef.current = null
+    }
+    canvas.addEventListener('wheel', onWheel, { passive: false })
+    return () => canvas.removeEventListener('wheel', onWheel)
+  }, [])
+
   function timeAt(clientX: number): number {
     const canvas = canvasRef.current
     if (!canvas) return 0
@@ -600,7 +716,7 @@ export function PitchRoll(props: PitchRollProps) {
     const gutter = width < 480 ? 34 : 48
     const plotLeft = gutter
     const plotWidth = Math.max(1, width - gutter)
-    const pps = width < 540 ? 54 : clamp(plotWidth / 9, 72, 120)
+    const pps = basePpsFor(width) * zoomRef.current
     const centerX = plotLeft + plotWidth / 2
     const p = propsRef.current
     let center = p.getCenter()
@@ -620,16 +736,27 @@ export function PitchRoll(props: PitchRollProps) {
   }
 
   function handlePointerMove(event: ReactPointerEvent<HTMLCanvasElement>): void {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const rect = canvas.getBoundingClientRect()
     const pointer = pointerRef.current
-    if (!pointer || pointer.id !== event.pointerId) return
+
+    if (!pointer || pointer.id !== event.pointerId) {
+      if (event.pointerType === 'mouse' && props.hoverable !== false) {
+        hoverRef.current = {
+          time: timeAt(event.clientX),
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top,
+        }
+      }
+      return
+    }
+
+    hoverRef.current = null
     const delta = event.clientX - pointer.lastX
     if (Math.abs(event.clientX - pointer.startX) > 5) pointer.moved = true
     if (pointer.moved && props.onPan) {
-      const canvas = canvasRef.current
-      const width = canvas?.getBoundingClientRect().width ?? 390
-      const gutter = width < 480 ? 34 : 48
-      const plotWidth = Math.max(1, width - gutter)
-      const pps = width < 540 ? 54 : clamp(plotWidth / 9, 72, 120)
+      const pps = basePpsFor(rect.width) * zoomRef.current
       if (delta !== 0) props.onPan(-delta / pps)
     }
     pointer.lastX = event.clientX
@@ -655,6 +782,10 @@ export function PitchRoll(props: PitchRollProps) {
         onPointerUp={handlePointerUp}
         onPointerCancel={() => {
           pointerRef.current = null
+          hoverRef.current = null
+        }}
+        onPointerLeave={() => {
+          hoverRef.current = null
         }}
       />
     </div>

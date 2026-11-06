@@ -35,7 +35,12 @@ export function PrepView({ song, settings, onBack, onStart }: PrepViewProps) {
 
   return (
     <div className="screen prep-screen">
-      <TopBar title="准备练唱" subtitle={song.name} onBack={onBack} />
+      <TopBar
+        title="准备练唱"
+        subtitle={song.name}
+        onBack={onBack}
+        right={<span className="key-hints desktop-only">Esc 返回</span>}
+      />
 
       <main className="page prep-page">
         <section className="song-hero">

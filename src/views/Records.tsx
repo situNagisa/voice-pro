@@ -99,6 +99,7 @@ export function RecordsView({
             </button>
           </section>
         ) : (
+          <>
           <ul className="record-list">
             {records.map((record) => (
               <li key={record.id} className="record-item">
@@ -134,6 +135,83 @@ export function RecordsView({
               </li>
             ))}
           </ul>
+
+          <div className="records-table-block">
+            <table className="records-table">
+              <thead>
+                <tr>
+                  <th>日期</th>
+                  <th>歌曲</th>
+                  <th>得分</th>
+                  <th>时长</th>
+                  <th>类型</th>
+                  <th className="table-actions-head">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {records.map((record) => (
+                  <tr
+                    key={record.id}
+                    tabIndex={0}
+                    onClick={() => onOpen(record.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        onOpen(record.id)
+                      }
+                    }}
+                  >
+                    <td className="table-date">{dateLabel(record.createdAt)}</td>
+                    <td>
+                      <span className="table-song">{record.songName}</span>
+                      {record.hitRate != null && (
+                        <small>命中 {Math.round(record.hitRate * 100)}%</small>
+                      )}
+                    </td>
+                    <td>
+                      <span className={`table-score ${scoreTone(record.score)}`}>
+                        {record.score ?? '—'}
+                      </span>
+                    </td>
+                    <td className="table-duration">{formatTime(record.duration)}</td>
+                    <td>
+                      <span className="record-kind">
+                        {record.songKind === 'demo' ? '示例歌' : '导入歌'}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="table-actions">
+                        <button
+                          type="button"
+                          className="text-btn"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onOpen(record.id)
+                          }}
+                        >
+                          回看
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-btn tiny danger"
+                          aria-label={`删除 ${record.songName} 的记录`}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            if (window.confirm(`删除「${record.songName}」这次记录？录音也会一起删除。`)) {
+                              onDelete(record.id)
+                            }
+                          }}
+                        >
+                          <TrashIcon />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          </>
         )}
 
         <p className="tiny-note center records-note">

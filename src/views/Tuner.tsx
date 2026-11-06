@@ -363,6 +363,35 @@ export function TunerView({ onOpenSettings }: TunerViewProps) {
         ? 1
         : -1
 
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.repeat) return
+      if (document.querySelector('.settings-sheet')) return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
+      if (event.code === 'Space') {
+        if (target?.closest('button')) return
+        if (phase === 'listening') {
+          event.preventDefault()
+          void pause()
+        } else if (phase === 'paused') {
+          event.preventDefault()
+          resume()
+        }
+      } else if (phase === 'paused' && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+        event.preventDefault()
+        const delta = (event.shiftKey ? 5 : 1) * (event.key === 'ArrowLeft' ? -1 : 1)
+        const base = cursorRef.current ?? pausedAtRef.current
+        const next = clamp(base + delta, 0, Math.max(0.1, pausedAtRef.current))
+        centerRef.current = clamp(next, 0, Math.max(0.5, pausedAtRef.current))
+        pickTime(next)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase])
+
   return (
     <div className="screen tuner-screen">
       <header className="tab-header">
@@ -370,9 +399,12 @@ export function TunerView({ onOpenSettings }: TunerViewProps) {
           <p className="eyebrow">实时</p>
           <h1 className="tab-title">音准仪</h1>
         </div>
-        <button type="button" className="icon-btn" aria-label="打开设置" onClick={onOpenSettings}>
-          <SettingsIcon />
-        </button>
+        <div className="tab-header-tools">
+          <span className="key-hints desktop-only">空格 暂停/继续 · 悬停查看音名</span>
+          <button type="button" className="icon-btn" aria-label="打开设置" onClick={onOpenSettings}>
+            <SettingsIcon />
+          </button>
+        </div>
       </header>
 
       <main className="page tuner-page">
@@ -455,7 +487,10 @@ export function TunerView({ onOpenSettings }: TunerViewProps) {
                 <div className="tuner-main">
                   <div className="tuner-note-block">
                     <span className="tuner-note">{note?.label ?? '—'}</span>
-                    <span className="tuner-octave">{note ? `${note.name} · 第 ${note.octave} 八度` : '等待声音'}</span>
+                    <span className="tuner-octave">
+                      {note && <span className="octave-name">{note.name} · </span>}
+                      {note ? `第 ${note.octave} 八度` : '等待声音'}
+                    </span>
                   </div>
                   <div className="tuner-cents-block">
                     <strong className={`tuner-cents ${liveSeverity}`}>
@@ -550,6 +585,66 @@ export function TunerView({ onOpenSettings }: TunerViewProps) {
               )}
             </aside>
 
+            <section className="desktop-transport tuner-dock" aria-label="音准仪控制">
+              <div className="dock-main">
+                <button
+                  type="button"
+                  className="round-btn dock-primary"
+                  aria-label={phase === 'listening' ? '暂停并回看' : '继续监听'}
+                  disabled={phase !== 'listening' && phase !== 'paused'}
+                  onClick={() => {
+                    if (phase === 'listening') void pause()
+                    else if (phase === 'paused') resume()
+                  }}
+                >
+                  {phase === 'listening' ? <PauseIcon /> : <PlayIcon />}
+                </button>
+                <span className="dock-time">
+                  {formatTime(phase === 'paused' ? pausedAt : elapsed)}
+                </span>
+                <div className="dock-status-copy">
+                  <strong>
+                    {phase === 'starting' ? '正在准备麦克风' : phase === 'paused' ? '已暂停 · 可回看' : '正在聆听'}
+                  </strong>
+                  <span>
+                    {phase === 'paused'
+                      ? '拖动卷帘查看历史，点按落下游标'
+                      : '小声哼一个长音，观察指针与曲线'}
+                  </span>
+                </div>
+                <span className={`dock-selection severity-${phase === 'paused' ? selectedSeverity : liveSeverity}`}>
+                  {phase === 'paused'
+                    ? cursor != null
+                      ? selected && selectedNote
+                        ? `${selectedNote.label} · ${selectedCents == null ? '—' : `${formatCents(selectedCents)} 音分`} · ${formatTime(cursor)}`
+                        : `${formatTime(cursor)} 附近没有检测到人声`
+                      : '点选卷帘定位到某一刻'
+                    : cents == null
+                      ? '等待声音'
+                      : `${note?.label ?? '—'} · ${formatCents(cents)} 音分`}
+                </span>
+                <button
+                  type="button"
+                  className="btn secondary dock-replay"
+                  disabled={phase !== 'paused' || snapshotLoading || !voiceReady}
+                  onClick={() => void playVoice()}
+                >
+                  {replayPlaying ? <StopIcon /> : <PlayIcon />}
+                  {replayPlaying ? '停止回放' : snapshotLoading ? '准备录音…' : '回放录音'}
+                </button>
+                <button type="button" className="btn ghost dock-end" onClick={stopAll}>
+                  停止
+                </button>
+              </div>
+              <div className="dock-sub">
+                <span>
+                  已录 {formatTime(phase === 'paused' ? pausedAt : elapsed)}
+                  {phase === 'paused' && selectedCents != null && ` · 选中 ${formatCents(selectedCents)} 音分`}
+                </span>
+                {error && <span className="dock-error">{error}</span>}
+                <span className="key-hints">空格 暂停/继续 · ← → 移动游标 · 悬停查看音名与偏差 · 滚轮缩放</span>
+              </div>
+            </section>
 
             {error && <div className="notice warn">{error}</div>}
             <p className="tiny-note center">

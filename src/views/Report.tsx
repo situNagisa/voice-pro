@@ -1,11 +1,13 @@
-import { useMemo } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { evaluateSession } from '../audio/analysis'
-import { formatCents, formatTime } from '../audio/pitch'
-import { recordMelody } from '../audio/review'
+import { formatCents, formatTime, midiToNoteName } from '../audio/pitch'
+import { readingAt, recordMelody } from '../audio/review'
 import type { PracticeRecord } from '../state/records'
 import { TopBar } from '../ui/controls'
 import { ChevronRightIcon, PlayIcon, RefreshIcon } from '../ui/icons'
+import { PitchRoll } from '../ui/PitchRoll'
+import { useIsDesktop } from '../ui/useMediaQuery'
 
 interface ReportViewProps {
   record: PracticeRecord
@@ -53,13 +55,55 @@ export function ReportView({ record, onBack, onReview, onRestart }: ReportViewPr
     (phrase) => phrase.samples >= 5 && phrase.hitRate != null,
   )?.index
 
+  const isDesktop = useIsDesktop()
+  const sortedPoints = useMemo(
+    () => record.points.slice().sort((a, b) => a.t - b.t),
+    [record.points],
+  )
+  const pointsRef = useRef(sortedPoints)
+  const [activePhraseIndex, setActivePhraseIndex] = useState<number | null>(null)
+  const [previewCursor, setPreviewCursor] = useState<number | null>(null)
+  const activeIndex = activePhraseIndex ?? focusIndex ?? report.phrases[0]?.index ?? null
+  const activePhrase = report.phrases.find((phrase) => phrase.index === activeIndex) ?? null
+  const previewCenterRef = useRef(
+    activePhrase ? activePhrase.start + (activePhrase.end - activePhrase.start) / 2 : 0,
+  )
+  const previewDuration = melody.duration || record.duration
+  const previewTime = previewCursor ?? activePhrase?.start ?? 0
+  const previewReading = readingAt(sortedPoints, previewTime, melody, {
+    transpose: record.transpose,
+    octaveAlign: record.octaveAlign,
+    tolerance: record.tolerance,
+  })
+  const previewNote = previewReading ? midiToNoteName(previewReading.point.midi) : null
+  const previewCents = previewReading?.comparison?.cents ?? null
+  const previewSeverity =
+    previewCents == null
+      ? 'neutral'
+      : Math.abs(previewCents) <= record.tolerance
+        ? 'good'
+        : previewCents > 0
+          ? 'sharp'
+          : 'flat'
+
+  function selectPhrase(phrase: { index: number; start: number; end: number }): void {
+    setActivePhraseIndex(phrase.index)
+    setPreviewCursor(phrase.start + 0.02)
+    previewCenterRef.current = Math.max(0, phrase.start + (phrase.end - phrase.start) / 2)
+  }
+
   return (
     <div className="screen report-screen">
       <TopBar
         title="练习报告"
         subtitle={record.songName}
         onBack={onBack}
-        right={<span className={`score-chip ${scoreTone(record.score)}`}>{record.score ?? '—'} 分</span>}
+        right={
+          <div className="topbar-tools">
+            <span className="key-hints desktop-only">Esc 返回</span>
+            <span className={`score-chip ${scoreTone(record.score)}`}>{record.score ?? '—'} 分</span>
+          </div>
+        }
       />
 
       <main className="page report-page">
@@ -110,11 +154,12 @@ export function ReportView({ record, onBack, onReview, onRestart }: ReportViewPr
           </div>
         )}
 
+        <div className="report-review-grid">
         <section className="section-block report-phrases">
           <div className="section-head">
             <div>
               <h2>逐句回看</h2>
-              <p>点任意一句，跳到那一刻的音高曲线与录音</p>
+              <p>{isDesktop ? '选中一句，右侧同时查看音高卷帘' : '点任意一句，跳到那一刻的音高曲线与录音'}</p>
             </div>
             <button type="button" className="text-btn" onClick={() => onReview(0)}>
               完整回看
@@ -133,9 +178,12 @@ export function ReportView({ record, onBack, onReview, onRestart }: ReportViewPr
                   <li key={`${phrase.index}-${phrase.start}`}>
                     <button
                       type="button"
-                      className={`phrase-row ${isFocus ? 'focus' : ''}`}
-                      onClick={() => onReview(phrase.start)}
-                      aria-label={`回看第 ${phrase.index + 1} 句`}
+                      className={`phrase-row ${isFocus ? 'focus' : ''} ${isDesktop && activePhrase?.index === phrase.index ? 'active' : ''}`}
+                      onClick={() => {
+                        if (isDesktop) selectPhrase(phrase)
+                        else onReview(phrase.start)
+                      }}
+                      aria-label={isDesktop ? `选中第 ${phrase.index + 1} 句` : `回看第 ${phrase.index + 1} 句`}
                     >
                       <div className="phrase-row-top">
                         <span className="phrase-title">
@@ -160,7 +208,7 @@ export function ReportView({ record, onBack, onReview, onRestart }: ReportViewPr
                         />
                       </div>
                       <span className="phrase-row-action">
-                        回看这句
+                        {isDesktop ? '在右侧查看' : '回看这句'}
                         <ChevronRightIcon />
                       </span>
                     </button>
@@ -173,6 +221,72 @@ export function ReportView({ record, onBack, onReview, onRestart }: ReportViewPr
             回看时会显示你当时的音高曲线；示例歌可以同时听原唱，导入歌只能回放录音。
           </p>
         </section>
+
+        {isDesktop && activePhrase && (
+          <aside className="report-preview card">
+            <div className="preview-head">
+              <div className="preview-title">
+                <span className="eyebrow">选中句子</span>
+                <strong>第 {activePhrase.index + 1} 句</strong>
+                <span>
+                  {formatTime(activePhrase.start)} – {formatTime(activePhrase.end)}
+                  {activePhrase.hitRate != null && ` · 命中 ${Math.round(activePhrase.hitRate * 100)}%`}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="btn small secondary"
+                onClick={() => onReview(activePhrase.start)}
+              >
+                打开完整回看
+                <ChevronRightIcon />
+              </button>
+            </div>
+            <div className="preview-roll">
+              <PitchRoll
+                melody={melody}
+                pointsRef={pointsRef}
+                duration={previewDuration}
+                transpose={record.transpose}
+                octaveAlign={record.octaveAlign}
+                tolerance={record.tolerance}
+                mode="practice"
+                interactive
+                active={false}
+                getPlayhead={() => previewCursor ?? previewTime}
+                getCenter={() => previewCenterRef.current}
+                getCursor={() => previewCursor}
+                highlight={{ start: activePhrase.start, end: activePhrase.end }}
+                onPick={(time) => setPreviewCursor(Math.max(0, Math.min(previewDuration, time)))}
+                onPan={(delta) => {
+                  previewCenterRef.current = Math.max(
+                    0,
+                    Math.min(previewDuration, previewCenterRef.current + delta),
+                  )
+                }}
+                ariaLabel="报告中的音高卷帘预览"
+                playheadLabel="选中"
+              />
+            </div>
+            <div className="preview-foot">
+              <span className={`preview-readout severity-${previewSeverity}`}>
+                {previewReading ? (
+                  <>
+                    <strong>{previewNote?.label ?? '—'}</strong>
+                    <span className={`preview-cents ${previewSeverity}`}>
+                      {previewCents == null ? '暂无参考' : `${formatCents(previewCents)} 音分`}
+                    </span>
+                    <span>{formatTime(previewTime)}</span>
+                  </>
+                ) : (
+                  <span>{formatTime(previewTime)} 附近没有检测到人声</span>
+                )}
+              </span>
+              <span className="key-hints">点按定位 · 滚轮缩放 · 拖动平移</span>
+            </div>
+          </aside>
+        )}
+        </div>
 
         <p className="score-formula">总分 = 命中率 70% + 音准稳定度 30%。</p>
 

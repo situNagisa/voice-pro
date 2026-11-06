@@ -22,7 +22,31 @@ const PROFILES = [
       deviceScaleFactor: 1,
     },
   },
+  {
+    name: 'wide',
+    context: {
+      viewport: { width: 1920, height: 1080 },
+      deviceScaleFactor: 1,
+    },
+  },
 ]
+
+async function openTab(page, profile, label) {
+  if (profile.name === 'mobile') {
+    await page.locator('.tabbar-item', { hasText: label }).click()
+  } else {
+    await page.locator('.side-nav .side-nav-item', { hasText: label }).click()
+  }
+}
+
+async function openSettings(page, profile) {
+  if (profile.name === 'mobile') {
+    await page.locator('.records-screen').getByRole('button', { name: '打开设置' }).click()
+  } else {
+    await page.locator('.side-nav').getByRole('button', { name: '打开设置' }).click()
+  }
+  await page.locator('.settings-sheet').waitFor({ timeout: 10_000 })
+}
 
 async function settle(page, ms = 300) {
   await page.evaluate(() => document.fonts?.ready)
@@ -61,37 +85,54 @@ async function runProfile(browser, profile) {
   await page.locator('.start-button').click()
   await page.locator('.countdown-layer').waitFor({ timeout: 10_000 })
   await page.locator('.practice-screen').waitFor({ timeout: 30_000 })
-  await page.locator('.practice-transport').waitFor({ timeout: 30_000 })
+  await page.locator('.practice-screen .pitch-roll').waitFor({ timeout: 30_000 })
   await page.waitForTimeout(5000) // 等曲线积累
   await shot(page, profile, 'practice')
 
   // 暂停回看
   await page.getByRole('button', { name: '暂停并回看' }).click()
-  await page.locator('.pause-panel').waitFor({ timeout: 15_000 })
+  await page.locator('.practice-page.is-paused').waitFor({ timeout: 15_000 })
   await page.waitForTimeout(1000)
   await shot(page, profile, 'practice-paused')
 
   // 结束并保存，制造一条记录，再回到主页
-  await page.locator('.pause-panel .end-btn').click()
+  if (profile.name === 'mobile') {
+    await page.locator('.pause-panel .end-btn').click()
+  } else {
+    await page.locator('.desktop-transport .dock-end').click()
+  }
   await page.locator('.report-screen').waitFor({ timeout: 30_000 })
+  await page.waitForTimeout(600)
+  await shot(page, profile, 'report')
   await page.getByRole('button', { name: '返回' }).click()
   await page.locator('.home-screen').waitFor({ timeout: 15_000 })
 
   // 音准仪
-  await page.locator('.tabbar-item', { hasText: '音准仪' }).click()
+  await openTab(page, profile, '音准仪')
   await page.locator('.tuner-screen').waitFor({ timeout: 15_000 })
   await page.waitForTimeout(5000)
   await shot(page, profile, 'tuner')
 
   // 记录页
-  await page.locator('.tabbar-item', { hasText: '记录' }).click()
+  await openTab(page, profile, '记录')
   await page.locator('.records-screen').waitFor({ timeout: 15_000 })
   await page.locator('.record-skeleton').first().waitFor({ state: 'detached', timeout: 15_000 }).catch(() => {})
   await shot(page, profile, 'records')
 
-  // 设置抽屉
-  await page.locator('.records-screen').getByRole('button', { name: '打开设置' }).click()
-  await page.locator('.settings-sheet').waitFor({ timeout: 10_000 })
+  // 打开记录 → 回看页
+  if (profile.name === 'mobile') {
+    await page.locator('.record-open').first().click()
+  } else {
+    await page.locator('.records-table tbody tr').first().click()
+  }
+  await page.locator('.review-screen').waitFor({ timeout: 30_000 })
+  await page.waitForTimeout(1200)
+  await shot(page, profile, 'review')
+  await page.locator('.review-screen .topbar .icon-btn').click()
+  await page.locator('.records-screen').waitFor({ timeout: 15_000 })
+
+  // 设置
+  await openSettings(page, profile)
   await page.waitForTimeout(500)
   await shot(page, profile, 'settings')
 
