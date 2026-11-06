@@ -67,3 +67,10 @@
 - Android WebView 结论：Capacitor 本地资源服务没有 COOP/COEP 配置入口，`crossOriginIsolated` 通常为 false，onnxruntime-web 只能单线程 WASM；AndroidX WebKit 1.18 的跨源隔离白名单还要求 `Document-Isolation-Policy` 响应头，Capacitor 当前给不了。WebGPU 取决于系统 WebView（Chrome 121+/Android 12+ 在浏览器里可用，WebView 未确认），代码里保留运行时检测与 WASM 回退，没有可靠的 native 开关可配。
 - 快速分离模式：不依赖 SharedArrayBuffer，0.5 s 重叠 + 多 Worker 各建 ORT 会话并行分段；默认手机快速、电脑标准，设置可切。22 首真实歌 OA 79.9→79.8（−0.1），桌面模拟手机单线程的 24 s 音频端到端 62.4 s→16.2 s；手机预计约 1.8–2×，待真机验证。
 - 「先给不分离的粗略旋律」不采用：EVAL 里直接提取 OA 38.2%，中置声道也只有 36.9%，都不可用。导入等待时改为引导去音准仪/练声小课，后台继续分析。
+
+### 2026-11-06 v0.5
+- 延迟自动校准、手机快速分离（单线程约 3.9×，准确率 79.9→79.8）
+- 歌词导入（LRC/纯文本自动对时）与跟唱显示
+- 全流程走查（scripts/walkthrough.mjs）修复 4 个交互问题；20s 导入：手机尺寸 6.1s / 桌面 8.8s
+- 待真机：蓝牙/外放校准、真实麦克风起音、手机分离内存与发热、系统分享
+- 已知：连续旋律按 7.5s 切句，可能跨歌词行
