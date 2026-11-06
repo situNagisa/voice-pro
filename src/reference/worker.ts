@@ -30,6 +30,7 @@ scope.onmessage = (event: MessageEvent<ExtractRequest>) => {
         sampleRate: request.sampleRate,
         duration: request.duration,
         channels: request.channels,
+        cleanVocals: request.cleanVocals,
       },
       report,
     );

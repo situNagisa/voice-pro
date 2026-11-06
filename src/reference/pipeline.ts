@@ -19,7 +19,10 @@ const MAX_CANDIDATES = 12;
 const UNVOICED = MAX_CANDIDATES;
 const STATE_STRIDE = MAX_CANDIDATES + 1;
 const VOICING_COST = 0.12;
+/** 人声分离后噪声底更低，可以少惩罚 voiced/unvoiced 切换，并把最短发声段放宽到 20 ms。 */
+const CLEAN_VOICING_COST = 0.09;
 const MIN_VOICED_RUN = 3; // 30 ms
+const CLEAN_MIN_VOICED_RUN = 2; // 20 ms
 const MAX_GAP_FILL = 4; // 40 ms
 const MIN_NOTE_SECONDS = 0.08;
 const NOTE_SMOOTH_RADIUS = 9; // 190 ms 中值滤波：压掉宽颤音，又不抹平音符台阶
@@ -28,6 +31,8 @@ export interface ExtractionInput {
   sampleRate: number;
   duration: number;
   channels: Float32Array[];
+  /** 已做人声分离：输入里基本只剩人声，可适当放宽发声判定。 */
+  cleanVocals?: boolean;
 }
 
 export type ProgressReporter = (stage: string, ratio: number) => void;
@@ -124,10 +129,19 @@ export function runExtraction(
   );
 
   report('跟踪主旋律', 0.84);
-  const rawPitch = trackPitch(analysis);
+  const cleanVocals = input.cleanVocals === true;
+  const rawPitch = trackPitch(
+    analysis,
+    cleanVocals ? CLEAN_VOICING_COST : VOICING_COST,
+  );
 
   report('判断发声', 0.9);
-  const melodyFrames = refineVoicing(rawPitch, analysis.quality, frameCount);
+  const melodyFrames = refineVoicing(
+    rawPitch,
+    analysis.quality,
+    frameCount,
+    cleanVocals ? CLEAN_MIN_VOICED_RUN : MIN_VOICED_RUN,
+  );
 
   report('生成音符', 0.95);
   const notes = buildNotes(
@@ -461,7 +475,10 @@ function salienceProminence(
  * Viterbi：候选峰为观测状态，另有一个 unvoiced 状态。
  * 转移代价惩罚大跳和八度跳，避免在相邻帧的谐波峰之间来回切换。
  */
-function trackPitch(analysis: AnalysisFrames): Float32Array {
+function trackPitch(
+  analysis: AnalysisFrames,
+  voicingCost: number = VOICING_COST,
+): Float32Array {
   const count = analysis.count;
   const prev = new Float64Array(STATE_STRIDE);
   const cur = new Float64Array(STATE_STRIDE);
@@ -489,7 +506,7 @@ function trackPitch(analysis: AnalysisFrames): Float32Array {
     const backBase = t * STATE_STRIDE;
 
     for (let k = 0; k < candidates; k++) {
-      let best = prev[UNVOICED] - VOICING_COST;
+      let best = prev[UNVOICED] - voicingCost;
       let bestState = UNVOICED;
       const midi = analysis.candidateMidi[base + k];
       for (let j = 0; j < prevCandidates; j++) {
@@ -508,7 +525,7 @@ function trackPitch(analysis: AnalysisFrames): Float32Array {
     let bestUnvoiced = prev[UNVOICED];
     let bestUnvoicedState = UNVOICED;
     for (let j = 0; j < prevCandidates; j++) {
-      const score = prev[j] - VOICING_COST;
+      const score = prev[j] - voicingCost;
       if (score > bestUnvoiced) {
         bestUnvoiced = score;
         bestUnvoicedState = j;
@@ -568,6 +585,7 @@ function refineVoicing(
   rawPitch: Float32Array,
   quality: Float32Array,
   frameCount: number,
+  minVoicedRun: number = MIN_VOICED_RUN,
 ): RefinedFrames {
   const midi = new Float32Array(frameCount);
   const clarity = new Float32Array(frameCount);
@@ -589,7 +607,7 @@ function refineVoicing(
     }
     let end = i;
     while (end < frameCount && !Number.isNaN(midi[end])) end++;
-    if (end - i < MIN_VOICED_RUN) {
+    if (end - i < minVoicedRun) {
       for (let j = i; j < end; j++) {
         midi[j] = Number.NaN;
         clarity[j] = 0;

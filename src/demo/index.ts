@@ -1,3 +1,4 @@
+import { markSyntheticAudio } from '../core/audioFlags'
 import { DEMO_SONG_SPECS, songDurationSec } from './songs'
 import { renderSong } from './synth'
 
@@ -39,10 +40,12 @@ export async function renderDemoSong(id: string): Promise<AudioBuffer> {
   }
 
   // 先占位再合成，避免同时点两次触发两遍渲染；失败时清掉缓存以便重试。
-  const task = renderSong(spec).catch((error: unknown) => {
-    cache.delete(id)
-    throw error
-  })
+  const task = renderSong(spec)
+    .then((buffer) => markSyntheticAudio(buffer))
+    .catch((error: unknown) => {
+      cache.delete(id)
+      throw error
+    })
   cache.set(id, task)
   return task
 }

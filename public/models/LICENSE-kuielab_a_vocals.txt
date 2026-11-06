@@ -1,0 +1,36 @@
+kuielab_a_vocals.onnx
+=====================
+
+来源：MDX-Net Track A 的 vocals 模型（KUIELab / Woosung Choi）。
+原始仓库：https://github.com/kuielab/mdx-net-submission
+模型文件：https://www.modelscope.cn/models/manyeyes/uvr-kuielab_a_vocals-onnx
+SHA-256：daba83c2ee1afee9139766ad64c9b6808d6b6f092fff04bed3338be50baac721
+
+原始仓库的 LICENSE（MIT，Copyright (c) 2021 AIcrowd）明确覆盖仓库内的
+源码与预训练模型（README 写明 “This repository contains the source code and
+pretrained models”）。MIT 许可证允许商业使用、修改、再分发，只需保留版权与
+许可声明：
+
+--------------------------------------------------------------------------
+MIT License
+
+Copyright (c) 2021 AIcrowd
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+--------------------------------------------------------------------------

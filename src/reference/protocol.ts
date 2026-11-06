@@ -11,6 +11,8 @@ export interface ExtractRequest {
   duration: number;
   /** 已复制、可 transfer 的声道数据（不能直接 transfer AudioBuffer 的内部 buffer）。 */
   channels: Float32Array[];
+  /** 输入已经过人声分离，可放宽发声判定。 */
+  cleanVocals?: boolean;
 }
 
 export type WorkerResponse =
