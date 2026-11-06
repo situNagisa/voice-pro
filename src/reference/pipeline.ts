@@ -3,9 +3,10 @@ import { ANALYSIS_RATE, HOP_SECONDS } from './protocol';
 import { Radix2Fft, hannWindow, resample } from './dsp';
 
 /**
- * v0.1 的纯 DSP 参考旋律提取：
- * 中置声道 → 16 kHz → STFT → 对数频率谐波求和 → Viterbi → 发声过滤 → 音符切分。
- * 该模块不依赖 DOM，便于在 Worker 和离线脚本中复用。
+ * 纯 DSP 的参考旋律提取：
+ * 中置声道 → 16 kHz → STFT → 对数频率谐波求和（候选音高）+ 逐帧谱形特征 →
+ * 逻辑回归给出“是否在唱”的概率 → Viterbi 联合决定音高与发声 → 清理 → 音符切分。
+ * 该模块不依赖 DOM，便于在 Worker 和离线脚本（scripts/eval）中复用。
  */
 
 const FFT_SIZE = 1024; // 64 ms @ 16 kHz：兼顾 80 Hz 低音的谐波分辨率和颤音跟踪
@@ -18,20 +19,99 @@ const MAX_HARMONICS = 12;
 const MAX_CANDIDATES = 12;
 const UNVOICED = MAX_CANDIDATES;
 const STATE_STRIDE = MAX_CANDIDATES + 1;
-const VOICING_COST = 0.12;
-/** 人声分离后噪声底更低，可以少惩罚 voiced/unvoiced 切换，并把最短发声段放宽到 20 ms。 */
-const CLEAN_VOICING_COST = 0.09;
-const MIN_VOICED_RUN = 3; // 30 ms
-const CLEAN_MIN_VOICED_RUN = 2; // 20 ms
-const MAX_GAP_FILL = 4; // 40 ms
-const MIN_NOTE_SECONDS = 0.08;
-const NOTE_SMOOTH_RADIUS = 9; // 190 ms 中值滤波：压掉宽颤音，又不抹平音符台阶
+
+/** 逐帧特征，顺序固定；离线拟合发声模型（scripts/eval/fit_voicing.py）与运行时共用。 */
+export const FEATURE_NAMES = [
+  'relE', // 帧能量相对全曲响亮段（P90）的 dB
+  'prom', // ln(谐波显著性峰/均值)
+  'hr', // 最强候选的谐波能量占 100–5000 Hz 总能量的比例
+  'pv', // 谐波峰/谷比（dB）
+  'hf', // 3 kHz 以上能量占比
+  'flat', // 谱平坦度（对数）
+  'nCand', // 候选峰个数
+  'midi', // 最强候选的音高
+  'width', // 侧/中能量比
+  'cand2', // 第二候选相对最强候选的显著性
+  'b1', // 100–250 Hz 频带能量占 100–6200 Hz 总能量的对数比（以下 b2…b6 依次到 6200 Hz）
+  'b2',
+  'b3',
+  'b4',
+  'b5',
+  'b6',
+  'hr5', // 只算前 5 个谐波的能量占比
+  'jit', // ±4 帧内最强候选音高的波动（对数）：持续纯音/嗡声接近 0，人声有自然抖动
+] as const;
+const FEATURE_COUNT = FEATURE_NAMES.length;
+const JITTER_RADIUS = 4;
+const SILENCE_DB = -35;
+
+/** 逐帧发声概率：逻辑回归，列名可带 @半径，表示对该特征做 ±半径 帧的滑动平均。 */
+export interface VoicingModel {
+  columns: string[];
+  coef: number[];
+  bias: number;
+}
+
+/** 可调参数；离线调优脚本会覆盖这些值，应用里一律用默认值。 */
+export interface ExtractionParams {
+  voicing: VoicingModel;
+  /** 发声 logit 的整体偏移，正值更倾向判为有声。 */
+  logitBias: number;
+  /**
+   * 整曲几乎没有静音（比全曲响亮段低 35 dB 的帧占比小于 mixSilentFraction）时，说明输入更像未分离的混音：
+   * 伴奏的谐波会被误判为人声，额外加上 mixLogitBias（负值）收紧发声判定。
+   * 分离后的人声总有换气/间奏的静音，合成示例歌的人声概率很高，不受影响。
+   */
+  mixLogitBias: number;
+  mixSilentFraction: number;
+  /** 无声↔有声切换的 Viterbi 代价（对数概率）。 */
+  switchCost: number;
+  /** 候选峰相对显著性对观测的权重。 */
+  candidateWeight: number;
+  /** 音高跳变代价倍率。 */
+  jumpScale: number;
+  minVoicedRun: number;
+  maxGapFill: number;
+  /** 切音符：音高中值滤波半径（帧），压掉颤音又不抹平音符台阶。 */
+  noteSmoothRadius: number;
+  /** 切音符：两侧中值窗口（帧）与判定为新音符的音高台阶（半音）。 */
+  noteSplitWindow: number;
+  noteSplitSemitones: number;
+  minNoteSeconds: number;
+}
+
+/**
+ * 默认参数：发声模型用 scripts/eval/fit_voicing.py 在 ccMixter 语料（人声分离结果 + 干声 stem）和合成示例歌上拟合，
+ * Viterbi 与切音符参数用 scripts/eval/tune.ts 在 dev 集上坐标下降。细节与指标见 docs/EVAL.md。
+ */
+const DEFAULT_PARAMS: ExtractionParams = {
+  voicing: {
+    columns: ['relE', 'hf', 'nCand', 'midi', 'cand2', 'b1', 'b2', 'b4', 'relE@3', 'relE@10', 'prom@3', 'prom@10', 'hr@3', 'hr@10', 'pv@3', 'pv@10', 'flat@10', 'hr5@3', 'jit@3', 'jit@10', 'b1@3', 'b2@3', 'b3@10', 'b6@3'],
+    coef: [0.0188387, -1.64254, -0.167058, 0.043522, -1.01419, 0.259547, 0.0519756, -0.0316567, 0.0183711, 0.018917, 0.585453, 1.6092, 1.68054, 1.17105, 0.026465, 0.0713079, 0.379901, 0.112557, -0.0131706, -0.54877, 0.211174, -0.0761309, -0.219249, 0.128401],
+    bias: -1.95346,
+  },
+  logitBias: -0.5,
+  mixLogitBias: -1.5,
+  mixSilentFraction: 0.06,
+  switchCost: 0.2,
+  candidateWeight: 0.5,
+  jumpScale: 4,
+  minVoicedRun: 6,
+  maxGapFill: 4,
+  noteSmoothRadius: 7,
+  noteSplitWindow: 5,
+  noteSplitSemitones: 0.5,
+  minNoteSeconds: 0.08,
+};
 
 export interface ExtractionInput {
   sampleRate: number;
   duration: number;
   channels: Float32Array[];
-  /** 已做人声分离：输入里基本只剩人声，可适当放宽发声判定。 */
+  /**
+   * 输入是否已是分离后的人声。发声模型对“分离后的人声”和“合成示例歌的整曲”用同一套参数
+   * （调用方无法可靠区分这两种被跳过分离的音频），所以该标记目前不影响结果。
+   */
   cleanVocals?: boolean;
 }
 
@@ -45,19 +125,26 @@ interface SpectrumGrid {
   entryWeight: Float32Array;
 }
 
-interface AnalysisFrames {
+export interface AnalysisFrames {
   count: number;
-  quality: Float32Array;
+  features: Float32Array;
   candidateCount: Uint8Array;
   candidateFreq: Float32Array;
   candidateMidi: Float32Array;
   candidateScore: Float32Array;
 }
 
-export function runExtraction(
+export interface PreparedSignal {
+  duration: number;
+  frameCount: number;
+  analysis: AnalysisFrames | null;
+}
+
+/** 下混、降采样、归一化并完成逐帧谱分析；音频静音/为空时 analysis 为 null。 */
+export function prepareAnalysis(
   input: ExtractionInput,
   report: ProgressReporter,
-): ReferenceMelody {
+): PreparedSignal {
   const { channels, sampleRate } = input;
   if (channels.length === 0 || !(sampleRate > 0)) {
     throw new Error('无法提取：音频没有可用声道');
@@ -74,7 +161,7 @@ export function runExtraction(
   const frameCount = Math.max(0, Math.floor(duration / HOP_SECONDS) + 1);
 
   if (sampleCount === 0 || frameCount === 0) {
-    return emptyMelody(duration, frameCount);
+    return { duration, frameCount, analysis: null };
   }
 
   report('准备音频', 0.01);
@@ -88,8 +175,7 @@ export function runExtraction(
     if (v > peak) peak = v;
   }
   if (peak < 1e-5) {
-    report('完成', 1);
-    return emptyMelody(duration, frameCount);
+    return { duration, frameCount, analysis: null };
   }
 
   // 在归一化之前用同一带宽比较 mid/side 能量；mid16k 已低通，不能直接比。
@@ -118,37 +204,77 @@ export function runExtraction(
     rmsBlocks(mid16k, ANALYSIS_RATE, frameCount, HOP_SECONDS),
     1,
   );
+  const relEnergy = relativeEnergyDb(frameEnergy);
 
   report('分析频谱', 0.08);
   const analysis = analyzeFrames(
     mid16k,
     frameCount,
-    frameEnergy,
+    relEnergy,
     widthRatio,
     report,
   );
+  return { duration, frameCount, analysis };
+}
 
-  report('跟踪主旋律', 0.84);
-  const cleanVocals = input.cleanVocals === true;
-  const rawPitch = trackPitch(
-    analysis,
-    cleanVocals ? CLEAN_VOICING_COST : VOICING_COST,
-  );
+/** 逐帧能量（dB）相对全曲响亮段（P90）的差值，限制在 [-70, 10]。 */
+function relativeEnergyDb(frameEnergy: Float32Array): Float32Array {
+  const db = new Float32Array(frameEnergy.length);
+  for (let i = 0; i < db.length; i++) {
+    db[i] = 20 * Math.log10(frameEnergy[i] + 1e-7);
+  }
+  const sorted = Float32Array.from(db).sort();
+  const ref = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.9))];
+  for (let i = 0; i < db.length; i++) db[i] = clamp(db[i] - ref, -70, 10);
+  return db;
+}
 
-  report('判断发声', 0.9);
-  const melodyFrames = refineVoicing(
-    rawPitch,
-    analysis.quality,
-    frameCount,
-    cleanVocals ? CLEAN_MIN_VOICED_RUN : MIN_VOICED_RUN,
-  );
+/** 供离线脚本拟合发声模型：返回逐帧特征（顺序见 FEATURE_NAMES）。 */
+export function analyzeFeatures(input: ExtractionInput): {
+  count: number;
+  data: Float32Array;
+} {
+  const prepared = prepareAnalysis(input, () => {});
+  if (!prepared.analysis) {
+    return { count: prepared.frameCount, data: new Float32Array(0) };
+  }
+  return { count: prepared.frameCount, data: prepared.analysis.features };
+}
+
+export function defaultParams(): ExtractionParams {
+  return DEFAULT_PARAMS;
+}
+
+export function runExtraction(
+  input: ExtractionInput,
+  report: ProgressReporter,
+  params?: ExtractionParams,
+): ReferenceMelody {
+  const prepared = prepareAnalysis(input, report);
+  return extractFromAnalysis(prepared, params ?? DEFAULT_PARAMS, report);
+}
+
+/** 谱分析之后的阶段：发声概率 → Viterbi → 清理 → 音符。调优脚本可复用同一份分析反复试参数。 */
+export function extractFromAnalysis(
+  prepared: PreparedSignal,
+  params: ExtractionParams,
+  report: ProgressReporter = () => {},
+): ReferenceMelody {
+  const { duration, frameCount, analysis } = prepared;
+  if (!analysis) {
+    report('完成', 1);
+    return emptyMelody(duration, frameCount);
+  }
+
+  report('判断发声', 0.84);
+  const voiced = voicedProbability(analysis, params);
+
+  report('跟踪主旋律', 0.9);
+  const rawPitch = trackPitch(analysis, voiced, params);
+  const melodyFrames = refineVoicing(rawPitch, voiced, frameCount, params);
 
   report('生成音符', 0.95);
-  const notes = buildNotes(
-    melodyFrames.midi,
-    frameCount,
-    duration,
-  );
+  const notes = buildNotes(melodyFrames.midi, frameCount, duration, params);
 
   const frames: PitchFrame[] = new Array(frameCount);
   for (let i = 0; i < frameCount; i++) {
@@ -161,6 +287,38 @@ export function runExtraction(
 
   report('完成', 1);
   return { duration, hop: HOP_SECONDS, frames, notes };
+}
+
+/** 逐帧发声概率 = sigmoid(逻辑回归)。 */
+function voicedProbability(
+  analysis: AnalysisFrames,
+  params: ExtractionParams,
+): Float32Array {
+  const { count, features } = analysis;
+  const { columns, coef, bias } = params.voicing;
+  const relEIndex = FEATURE_NAMES.indexOf('relE');
+  let silent = 0;
+  for (let t = 0; t < count; t++) {
+    if (features[t * FEATURE_COUNT + relEIndex] < SILENCE_DB) silent++;
+  }
+  const mixLike = silent < params.mixSilentFraction * count;
+  const logit = new Float32Array(count).fill(
+    bias + params.logitBias + (mixLike ? params.mixLogitBias : 0),
+  );
+  const column = new Float32Array(count);
+  for (let c = 0; c < columns.length; c++) {
+    const [name, radius] = columns[c].split('@');
+    const index = FEATURE_NAMES.indexOf(name as (typeof FEATURE_NAMES)[number]);
+    if (index < 0) throw new Error(`未知特征：${name}`);
+    for (let t = 0; t < count; t++) column[t] = features[t * FEATURE_COUNT + index];
+    const values = radius ? smooth(column, Number(radius)) : column;
+    for (let t = 0; t < count; t++) logit[t] += coef[c] * values[t];
+  }
+  const out = new Float32Array(count);
+  for (let t = 0; t < count; t++) {
+    out[t] = clamp(1 / (1 + Math.exp(-logit[t])), 1e-4, 1 - 1e-4);
+  }
+  return out;
 }
 
 function emptyMelody(duration: number, frameCount: number): ReferenceMelody {
@@ -282,7 +440,7 @@ function buildSpectrumGrid(): SpectrumGrid {
 function analyzeFrames(
   samples: Float32Array,
   frameCount: number,
-  frameEnergy: Float32Array,
+  relEnergy: Float32Array,
   widthRatio: Float32Array | null,
   report: ProgressReporter,
 ): AnalysisFrames {
@@ -304,7 +462,8 @@ function analyzeFrames(
   const candidateMidi = new Float32Array(frameCount * MAX_CANDIDATES);
   const candidateScore = new Float32Array(frameCount * MAX_CANDIDATES);
   const candidateCount = new Uint8Array(frameCount);
-  const quality = new Float32Array(frameCount);
+  const features = new Float32Array(frameCount * FEATURE_COUNT);
+  const power = new Float32Array(FFT_SIZE / 2 + 1);
 
   for (let t = 0; t < frameCount; t++) {
     const center = t * HOP_SAMPLES;
@@ -321,7 +480,8 @@ function analyzeFrames(
 
     let magMax = 0;
     for (let b = 1; b <= maxMagBin; b++) {
-      const value = Math.sqrt(re[b] * re[b] + im[b] * im[b]);
+      power[b] = re[b] * re[b] + im[b] * im[b];
+      const value = Math.sqrt(power[b]);
       magnitude[b] = value;
       if (value > magMax) magMax = value;
     }
@@ -349,28 +509,6 @@ function analyzeFrames(
 
     // 谐波显著性的峰/均值比：噪声帧的谱峰平坦，这个比值会明显偏低。
     const prominence = salienceProminence(salMax, salSum, grid.binCount);
-    const promScore = clamp(
-      Math.log(prominence / 2) / Math.log(6),
-      0,
-      1,
-    );
-
-    const energyDb = 20 * Math.log10(frameEnergy[t] + 1e-9);
-    const energyScore = clamp((energyDb + 52) / 27, 0, 1);
-    let widthScore = 1;
-    if (widthRatio) {
-      const ratio = widthRatio[t];
-      widthScore = clamp(
-        1 / (1 + 0.45 * Math.max(0, ratio - 0.4)),
-        0.5,
-        1,
-      );
-    }
-    const q =
-      promScore *
-      (0.35 + 0.65 * energyScore) *
-      (0.6 + 0.4 * widthScore);
-    quality[t] = q;
 
     let topCount = 0;
     if (salMax > 1e-9) {
@@ -446,18 +584,151 @@ function analyzeFrames(
     }
     candidateCount[t] = accepted;
 
+    const fb = t * FEATURE_COUNT;
+    features[fb] = relEnergy[t];
+    features[fb + 1] = Math.log(Math.max(prominence, 1));
+    features[fb + 6] = accepted;
+    features[fb + 8] = widthRatio ? widthRatio[t] : 0;
+    features[fb + 9] =
+      accepted > 1
+        ? candidateScore[base + 1] / Math.max(1e-6, candidateScore[base])
+        : 0;
+    if (accepted > 0) {
+      features[fb + 7] = candidateMidi[base];
+      const spectral = spectralShape(
+        power,
+        candidateFreq[base],
+        maxMagBin,
+      );
+      features[fb + 2] = spectral.harmonicRatio;
+      features[fb + 3] = spectral.peakValleyDb;
+      features[fb + 4] = spectral.highShare;
+      features[fb + 5] = spectral.flatness;
+      features[fb + 16] = spectral.harmonicRatio5;
+      for (let band = 0; band < 6; band++) {
+        features[fb + 10 + band] = spectral.bands[band];
+      }
+    }
+
     if ((t & 127) === 0) {
       report('分析频谱', 0.08 + 0.74 * ((t + 1) / frameCount));
     }
   }
 
+  const jitIndex = FEATURE_NAMES.indexOf('jit');
+  const midiIndex = FEATURE_NAMES.indexOf('midi');
+  for (let t = 0; t < frameCount; t++) {
+    const from = Math.max(0, t - JITTER_RADIUS);
+    const to = Math.min(frameCount - 1, t + JITTER_RADIUS);
+    let sum = 0;
+    let sumSq = 0;
+    let n = 0;
+    for (let j = from; j <= to; j++) {
+      if (candidateCount[j] === 0) continue;
+      const m = features[j * FEATURE_COUNT + midiIndex];
+      sum += m;
+      sumSq += m * m;
+      n++;
+    }
+    let deviation = 0;
+    if (n > 2) {
+      const mean = sum / n;
+      deviation = Math.sqrt(Math.max(0, sumSq / n - mean * mean));
+    }
+    features[t * FEATURE_COUNT + jitIndex] = Math.log(Math.min(deviation, 2) + 0.01);
+  }
+
   return {
     count: frameCount,
-    quality,
+    features,
     candidateCount,
     candidateFreq,
     candidateMidi,
     candidateScore,
+  };
+}
+
+const SHAPE_LOW_BIN = Math.round((100 * FFT_SIZE) / ANALYSIS_RATE);
+const SHAPE_HIGH_BIN = Math.round((5000 * FFT_SIZE) / ANALYSIS_RATE);
+const BAND_EDGES = [100, 250, 500, 1000, 2000, 3500, 6300].map((hz) =>
+  Math.round((hz * FFT_SIZE) / ANALYSIS_RATE),
+);
+const SHAPE_SPLIT_BIN = Math.round((3000 * FFT_SIZE) / ANALYSIS_RATE);
+
+/** 以最强候选 f0 为准的谱形特征：谐波能量占比、峰谷比、高频占比、平坦度。 */
+function spectralShape(
+  power: Float32Array,
+  f0: number,
+  maxBin: number,
+): {
+  harmonicRatio: number;
+  peakValleyDb: number;
+  highShare: number;
+  flatness: number;
+  harmonicRatio5: number;
+  bands: Float64Array;
+} {
+  const high = Math.min(SHAPE_HIGH_BIN, maxBin);
+  let total = 0;
+  let highSum = 0;
+  let logSum = 0;
+  for (let b = SHAPE_LOW_BIN; b <= high; b++) {
+    const v = power[b] + 1e-12;
+    total += v;
+    logSum += Math.log(v);
+    if (b >= SHAPE_SPLIT_BIN) highSum += v;
+  }
+  const bins = high - SHAPE_LOW_BIN + 1;
+  const flatness = logSum / bins - Math.log(total / bins);
+
+  const bands = new Float64Array(BAND_EDGES.length - 1);
+  let bandTotal = 0;
+  for (let band = 0; band < bands.length; band++) {
+    for (let b = BAND_EDGES[band]; b < BAND_EDGES[band + 1] && b <= maxBin; b++) {
+      bands[band] += power[b];
+    }
+    bandTotal += bands[band];
+  }
+  for (let band = 0; band < bands.length; band++) {
+    bands[band] = Math.log10((bands[band] + 1e-12) / (bandTotal + 1e-12));
+  }
+
+  const spacing = (f0 * FFT_SIZE) / ANALYSIS_RATE;
+  let harmonic = 0;
+  let harmonic5 = 0;
+  let peakSum = 0;
+  let valleySum = 0;
+  let pairs = 0;
+  for (let h = 1; spacing * h <= high; h++) {
+    const center = Math.round(spacing * h);
+    const radius = 1 + Math.floor(h / 6);
+    let peak = 0;
+    for (let b = center - radius; b <= center + radius; b++) {
+      if (b >= 1 && b <= high) {
+        harmonic += power[b];
+        if (h <= 5) harmonic5 += power[b];
+        if (power[b] > peak) peak = power[b];
+      }
+    }
+    const mid = Math.round(spacing * (h + 0.5));
+    if (h <= 8 && mid + 1 <= high && spacing >= 4) {
+      let valley = Infinity;
+      for (let b = mid - 1; b <= mid + 1; b++) {
+        if (power[b] < valley) valley = power[b];
+      }
+      peakSum += peak;
+      valleySum += valley;
+      pairs++;
+    }
+  }
+  return {
+    harmonicRatio: total > 0 ? Math.min(1, harmonic / total) : 0,
+    peakValleyDb:
+      pairs > 0 ? 10 * Math.log10((peakSum + 1e-12) / (valleySum + 1e-12)) : 0,
+    highShare: total > 0 ? highSum / total : 0,
+    flatness,
+    harmonicRatio5: total > 0 ? Math.min(1, harmonic5 / total) : 0,
+    bands,
   };
 }
 
@@ -473,31 +744,34 @@ function salienceProminence(
 
 /**
  * Viterbi：候选峰为观测状态，另有一个 unvoiced 状态。
+ * 发声观测 = log P(voiced) + 候选相对显著性；无声观测 = log P(unvoiced)。
  * 转移代价惩罚大跳和八度跳，避免在相邻帧的谐波峰之间来回切换。
  */
 function trackPitch(
   analysis: AnalysisFrames,
-  voicingCost: number = VOICING_COST,
+  voiced: Float32Array,
+  params: ExtractionParams,
 ): Float32Array {
   const count = analysis.count;
   const prev = new Float64Array(STATE_STRIDE);
   const cur = new Float64Array(STATE_STRIDE);
   const back = new Int16Array(count * STATE_STRIDE);
   back.fill(-1);
+  const { switchCost, candidateWeight, jumpScale } = params;
 
   for (let t = 0; t < count; t++) {
     const candidates = analysis.candidateCount[t];
     const base = t * MAX_CANDIDATES;
-    const q = analysis.quality[t];
+    const logVoiced = Math.log(voiced[t]);
+    const logUnvoiced = Math.log(1 - voiced[t]);
 
-    const localUnvoiced = 0.5 - 0.25 * q;
     if (t === 0) {
       for (let k = 0; k < candidates; k++) {
         prev[k] =
-          0.25 +
-          0.75 * analysis.candidateScore[base + k] * q;
+          logVoiced +
+          candidateWeight * (analysis.candidateScore[base + k] - 1);
       }
-      prev[UNVOICED] = localUnvoiced;
+      prev[UNVOICED] = logUnvoiced;
       continue;
     }
 
@@ -506,32 +780,36 @@ function trackPitch(
     const backBase = t * STATE_STRIDE;
 
     for (let k = 0; k < candidates; k++) {
-      let best = prev[UNVOICED] - voicingCost;
+      let best = prev[UNVOICED] - switchCost;
       let bestState = UNVOICED;
       const midi = analysis.candidateMidi[base + k];
       for (let j = 0; j < prevCandidates; j++) {
         const score =
           prev[j] -
-          transitionCost(midi - analysis.candidateMidi[prevBase + j]);
+          jumpScale *
+            transitionCost(midi - analysis.candidateMidi[prevBase + j]);
         if (score > best) {
           best = score;
           bestState = j;
         }
       }
-      cur[k] = best + 0.25 + 0.75 * analysis.candidateScore[base + k] * q;
+      cur[k] =
+        best +
+        logVoiced +
+        candidateWeight * (analysis.candidateScore[base + k] - 1);
       back[backBase + k] = bestState;
     }
 
     let bestUnvoiced = prev[UNVOICED];
     let bestUnvoicedState = UNVOICED;
     for (let j = 0; j < prevCandidates; j++) {
-      const score = prev[j] - voicingCost;
+      const score = prev[j] - switchCost;
       if (score > bestUnvoiced) {
         bestUnvoiced = score;
         bestUnvoicedState = j;
       }
     }
-    cur[UNVOICED] = bestUnvoiced + localUnvoiced;
+    cur[UNVOICED] = bestUnvoiced + logUnvoiced;
     back[backBase + UNVOICED] = bestUnvoicedState;
 
     prev.set(cur);
@@ -583,16 +861,17 @@ interface RefinedFrames {
  */
 function refineVoicing(
   rawPitch: Float32Array,
-  quality: Float32Array,
+  voiced: Float32Array,
   frameCount: number,
-  minVoicedRun: number = MIN_VOICED_RUN,
+  params: ExtractionParams,
 ): RefinedFrames {
+  const { minVoicedRun, maxGapFill } = params;
   const midi = new Float32Array(frameCount);
   const clarity = new Float32Array(frameCount);
   for (let i = 0; i < frameCount; i++) {
     if (rawPitch[i] > 0) {
       midi[i] = 69 + 12 * Math.log2(rawPitch[i] / 440);
-      clarity[i] = quality[i];
+      clarity[i] = voiced[i];
     } else {
       midi[i] = Number.NaN;
       clarity[i] = 0;
@@ -628,7 +907,7 @@ function refineVoicing(
     if (
       i > 0 &&
       end < frameCount &&
-      gap <= MAX_GAP_FILL &&
+      gap <= maxGapFill &&
       Math.abs(midi[end] - midi[i - 1]) <= 1.5
     ) {
       const from = midi[i - 1];
@@ -659,9 +938,13 @@ function buildNotes(
   midi: Float32Array,
   frameCount: number,
   duration: number,
+  params: ExtractionParams,
 ): Note[] {
-  const smoothed = medianSmooth(midi, frameCount, NOTE_SMOOTH_RADIUS);
-  const scratch = new Float64Array(5);
+  const { noteSmoothRadius, noteSplitWindow, noteSplitSemitones, minNoteSeconds } =
+    params;
+  const smoothed = medianSmooth(midi, frameCount, noteSmoothRadius);
+  const scratch = new Float64Array(noteSplitWindow);
+  const minSegment = noteSplitWindow + 1;
   const notes: Note[] = [];
   let i = 0;
 
@@ -674,11 +957,11 @@ function buildNotes(
 
     const segments: Array<{ start: number; end: number }> = [];
     let segmentStart = runStart;
-    for (let j = runStart + 5; j <= runEnd - 5; j++) {
-      if (j - segmentStart < 6) continue;
-      const left = median5(smoothed, j - 5, scratch);
-      const right = median5(smoothed, j, scratch);
-      if (Math.abs(right - left) > 0.6) {
+    for (let j = runStart + noteSplitWindow; j <= runEnd - noteSplitWindow; j++) {
+      if (j - segmentStart < minSegment) continue;
+      const left = medianWindow(smoothed, j - noteSplitWindow, scratch);
+      const right = medianWindow(smoothed, j, scratch);
+      if (Math.abs(right - left) > noteSplitSemitones) {
         segments.push({ start: segmentStart, end: j });
         segmentStart = j;
       }
@@ -692,11 +975,10 @@ function buildNotes(
       const noteEnd = Math.min(duration, end * HOP_SECONDS);
       if (noteEnd <= noteStart) continue;
 
-      const from = start + (end - start >= 6 ? 1 : 0);
-      const to = end - (end - start >= 6 ? 1 : 0);
-      const noteMidi = medianRange(midi, from, to);
+      const trim = end - start >= minSegment ? 1 : 0;
+      const noteMidi = medianRange(midi, start + trim, end - trim);
 
-      if (noteEnd - noteStart < MIN_NOTE_SECONDS) {
+      if (noteEnd - noteStart < minNoteSeconds) {
         const last = notes[notes.length - 1];
         if (last && noteStart - last.end < 0.06) {
           last.end = Math.max(last.end, noteEnd);
@@ -727,9 +1009,15 @@ function buildNotes(
   return notes.filter((note) => note.end > note.start);
 }
 
-function median5(values: Float32Array, start: number, scratch: Float64Array): number {
-  for (let j = 0; j < 5; j++) scratch[j] = values[start + j];
-  for (let a = 1; a < 5; a++) {
+/** 取 values[start .. start+scratch.length) 的中位数。 */
+function medianWindow(
+  values: Float32Array,
+  start: number,
+  scratch: Float64Array,
+): number {
+  const size = scratch.length;
+  for (let j = 0; j < size; j++) scratch[j] = values[start + j];
+  for (let a = 1; a < size; a++) {
     const value = scratch[a];
     let b = a - 1;
     while (b >= 0 && scratch[b] > value) {
@@ -738,7 +1026,8 @@ function median5(values: Float32Array, start: number, scratch: Float64Array): nu
     }
     scratch[b + 1] = value;
   }
-  return scratch[2];
+  const mid = size >> 1;
+  return size % 2 === 0 ? (scratch[mid - 1] + scratch[mid]) * 0.5 : scratch[mid];
 }
 
 /** 仅在 voiced 段内做中值滤波，保留 NaN 缺口和音符台阶的位置。 */

@@ -1,0 +1,10 @@
+{
+  "name": "voice-pro-eval",
+  "private": true,
+  "type": "module",
+  "description": "音准镜真实歌曲评测脚本的独立依赖，不影响主应用 package.json",
+  "dependencies": {
+    "onnxruntime-node": "^1.31.1",
+    "tsx": "^4.23.15"
+  }
+}
