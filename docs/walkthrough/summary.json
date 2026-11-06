@@ -1,0 +1,489 @@
+[
+  {
+    "profile": "mobile",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "startedAt": "2026-11-06T15:01:45.388Z",
+    "steps": [
+      {
+        "name": "首启隐私弹窗",
+        "ms": 1364,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "练歌首页",
+        "ms": 483,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "准备页与选调",
+        "ms": 2387,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "倒数并开始练唱",
+        "ms": 17230,
+        "ok": true,
+        "expectedLong": true
+      },
+      {
+        "name": "暂停、拖动回看、继续",
+        "ms": 9586,
+        "ok": true,
+        "expectedLong": true
+      },
+      {
+        "name": "结束并查看报告",
+        "ms": 1591,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "单句循环与变速",
+        "ms": 6233,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "成绩卡",
+        "ms": 1420,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "同歌第二次练习",
+        "ms": 15049,
+        "ok": true,
+        "expectedLong": true
+      },
+      {
+        "name": "记录页与进步",
+        "ms": 1803,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "同歌对比",
+        "ms": 2658,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "打开记录回看",
+        "ms": 1915,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "音准仪",
+        "ms": 5547,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "练声小课",
+        "ms": 11149,
+        "ok": true,
+        "expectedLong": true
+      },
+      {
+        "name": "导入 20 秒音频",
+        "ms": 8259,
+        "ok": true,
+        "expectedLong": true
+      },
+      {
+        "name": "导入歌准备页",
+        "ms": 1166,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "导入纯文本歌词",
+        "ms": 3380,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "导入歌练唱",
+        "ms": 15670,
+        "ok": true,
+        "expectedLong": true
+      },
+      {
+        "name": "删除歌词入口",
+        "ms": 1465,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "设置与延迟校准",
+        "ms": 13836,
+        "ok": true,
+        "expectedLong": true
+      },
+      {
+        "name": "清空歌曲缓存",
+        "ms": 2321,
+        "ok": true,
+        "expectedLong": false
+      }
+    ],
+    "issues": [],
+    "console": [
+      {
+        "step": "倒数并开始练唱",
+        "type": "warning",
+        "text": "The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet)",
+        "count": 4
+      },
+      {
+        "step": "导入 20 秒音频",
+        "type": "warning",
+        "text": "removing requested execution provider \"webgpu\" from session options because it is not available: Error: Failed to get GPU adapter. You may need to enable flag \"--enable-unsafe-webgpu\" if you are using Chrome.",
+        "count": 2
+      }
+    ],
+    "pageErrors": [],
+    "dialogs": [
+      {
+        "step": "删除歌词入口",
+        "type": "confirm",
+        "message": "删除这首歌的歌词？练习报告与跟唱里的歌词会一并消失，无法恢复。"
+      },
+      {
+        "step": "清空歌曲缓存",
+        "type": "confirm",
+        "message": "清空歌曲库？原曲、伴奏、歌词和分析结果都会删除，练习记录会保留（回看时只能听录音）。"
+      }
+    ],
+    "import": {
+      "fileName": "voicepro-walkthrough-mobile-1793977384503.wav",
+      "bytes": 3528044,
+      "totalMs": 6117,
+      "stages": [
+        {
+          "label": "正在查找歌曲缓存…",
+          "percent": "25%",
+          "atMs": 13
+        },
+        {
+          "label": "正在初始化人声分离模型…",
+          "percent": "16%",
+          "atMs": 321
+        },
+        {
+          "label": "正在压缩伴奏（立体声）…",
+          "percent": "94%",
+          "atMs": 5813
+        },
+        {
+          "label": "导入音频文件",
+          "percent": "",
+          "atMs": 6117
+        }
+      ],
+      "outcome": {
+        "success": "《voicepro-walkthrough-mobile-1793977384503》已分析完成，保存在我的歌里。现在打开知道了",
+        "song": "voicepro-walkthrough-mobile-1793977384503"
+      }
+    },
+    "screenshots": [
+      "docs/walkthrough/mobile-01-privacy.png",
+      "docs/walkthrough/mobile-02-home.png",
+      "docs/walkthrough/mobile-03-prep.png",
+      "docs/walkthrough/mobile-04-countdown.png",
+      "docs/walkthrough/mobile-05-practice.png",
+      "docs/walkthrough/mobile-06-practice-paused.png",
+      "docs/walkthrough/mobile-07-practice-paused-scrubbed.png",
+      "docs/walkthrough/mobile-08-report.png",
+      "docs/walkthrough/mobile-09-report-phrases.png",
+      "docs/walkthrough/mobile-10-loop.png",
+      "docs/walkthrough/mobile-11-loop-slow.png",
+      "docs/walkthrough/mobile-12-share-card.png",
+      "docs/walkthrough/mobile-13-practice-second.png",
+      "docs/walkthrough/mobile-14-records-progress.png",
+      "docs/walkthrough/mobile-15-records-songs.png",
+      "docs/walkthrough/mobile-16-song-progress.png",
+      "docs/walkthrough/mobile-17-song-compare.png",
+      "docs/walkthrough/mobile-18-review.png",
+      "docs/walkthrough/mobile-19-tuner.png",
+      "docs/walkthrough/mobile-20-coach-list.png",
+      "docs/walkthrough/mobile-21-coach-setup.png",
+      "docs/walkthrough/mobile-22-coach-live.png",
+      "docs/walkthrough/mobile-23-coach-result.png",
+      "docs/walkthrough/mobile-24-import-done.png",
+      "docs/walkthrough/mobile-25-import-prep.png",
+      "docs/walkthrough/mobile-26-lyrics-sheet.png",
+      "docs/walkthrough/mobile-27-lyrics-persisted.png",
+      "docs/walkthrough/mobile-28-import-practice.png",
+      "docs/walkthrough/mobile-29-import-report.png",
+      "docs/walkthrough/mobile-30-lyrics-delete-entry.png",
+      "docs/walkthrough/mobile-31-lyrics-deleted.png",
+      "docs/walkthrough/mobile-32-settings.png",
+      "docs/walkthrough/mobile-33-calibration.png",
+      "docs/walkthrough/mobile-34-calibration-running.png",
+      "docs/walkthrough/mobile-35-calibration-result.png",
+      "docs/walkthrough/mobile-36-settings-cleared.png",
+      "docs/walkthrough/mobile-37-home-cleared.png"
+    ],
+    "finishedAt": "2026-11-06T15:03:49.901Z",
+    "slowSteps": []
+  },
+  {
+    "profile": "desktop",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "startedAt": "2026-11-06T15:03:49.930Z",
+    "steps": [
+      {
+        "name": "首启隐私弹窗",
+        "ms": 1098,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "练歌首页",
+        "ms": 344,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "准备页与选调",
+        "ms": 2261,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "倒数并开始练唱",
+        "ms": 17089,
+        "ok": true,
+        "expectedLong": true
+      },
+      {
+        "name": "暂停、拖动回看、继续",
+        "ms": 21377,
+        "ok": true,
+        "expectedLong": true
+      },
+      {
+        "name": "结束并查看报告",
+        "ms": 1512,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "单句循环与变速",
+        "ms": 5864,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "成绩卡",
+        "ms": 1392,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "同歌第二次练习",
+        "ms": 14989,
+        "ok": true,
+        "expectedLong": true
+      },
+      {
+        "name": "记录页与进步",
+        "ms": 1550,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "同歌对比",
+        "ms": 2478,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "打开记录回看",
+        "ms": 1787,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "音准仪",
+        "ms": 5399,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "练声小课",
+        "ms": 10723,
+        "ok": true,
+        "expectedLong": true
+      },
+      {
+        "name": "导入 20 秒音频",
+        "ms": 10862,
+        "ok": true,
+        "expectedLong": true
+      },
+      {
+        "name": "导入歌准备页",
+        "ms": 853,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "导入纯文本歌词",
+        "ms": 2890,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "导入歌练唱",
+        "ms": 15479,
+        "ok": true,
+        "expectedLong": true
+      },
+      {
+        "name": "删除歌词入口",
+        "ms": 1090,
+        "ok": true,
+        "expectedLong": false
+      },
+      {
+        "name": "设置与延迟校准",
+        "ms": 12523,
+        "ok": true,
+        "expectedLong": true
+      },
+      {
+        "name": "清空歌曲缓存",
+        "ms": 1958,
+        "ok": true,
+        "expectedLong": false
+      }
+    ],
+    "issues": [],
+    "console": [
+      {
+        "step": "倒数并开始练唱",
+        "type": "warning",
+        "text": "The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet)",
+        "count": 4
+      },
+      {
+        "step": "导入 20 秒音频",
+        "type": "warning",
+        "text": "removing requested execution provider \"webgpu\" from session options because it is not available: Error: Failed to get GPU adapter. You may need to enable flag \"--enable-unsafe-webgpu\" if you are using Chrome.",
+        "count": 1
+      }
+    ],
+    "pageErrors": [],
+    "dialogs": [
+      {
+        "step": "删除歌词入口",
+        "type": "confirm",
+        "message": "删除这首歌的歌词？练习报告与跟唱里的歌词会一并消失，无法恢复。"
+      },
+      {
+        "step": "清空歌曲缓存",
+        "type": "confirm",
+        "message": "清空歌曲库？原曲、伴奏、歌词和分析结果都会删除，练习记录会保留（回看时只能听录音）。"
+      }
+    ],
+    "import": {
+      "fileName": "voicepro-walkthrough-desktop-1793977518496.wav",
+      "bytes": 3528044,
+      "totalMs": 8848,
+      "stages": [
+        {
+          "label": "正在查找歌曲缓存…",
+          "percent": "25%",
+          "atMs": 15
+        },
+        {
+          "label": "正在加载人声分离模型…",
+          "percent": "12%",
+          "atMs": 317
+        },
+        {
+          "label": "正在分离人声…",
+          "percent": "14%",
+          "atMs": 1234
+        },
+        {
+          "label": "正在分离人声（约 不到 10 秒）",
+          "percent": "42%",
+          "atMs": 4895
+        },
+        {
+          "label": "正在提取参考旋律…",
+          "percent": "72%",
+          "atMs": 8243
+        },
+        {
+          "label": "正在压缩伴奏（立体声）…",
+          "percent": "94%",
+          "atMs": 8545
+        },
+        {
+          "label": "导入音频文件",
+          "percent": "",
+          "atMs": 8848
+        }
+      ],
+      "outcome": {
+        "success": "《voicepro-walkthrough-desktop-1793977518496》已分析完成，保存在我的歌里。现在打开知道了",
+        "song": "voicepro-walkthrough-desktop-1793977518496"
+      }
+    },
+    "screenshots": [
+      "docs/walkthrough/desktop-01-privacy.png",
+      "docs/walkthrough/desktop-02-home.png",
+      "docs/walkthrough/desktop-03-prep.png",
+      "docs/walkthrough/desktop-04-countdown.png",
+      "docs/walkthrough/desktop-05-practice.png",
+      "docs/walkthrough/desktop-06-practice-paused.png",
+      "docs/walkthrough/desktop-07-practice-paused-scrubbed.png",
+      "docs/walkthrough/desktop-08-report.png",
+      "docs/walkthrough/desktop-09-report-phrases.png",
+      "docs/walkthrough/desktop-10-loop.png",
+      "docs/walkthrough/desktop-11-loop-slow.png",
+      "docs/walkthrough/desktop-12-share-card.png",
+      "docs/walkthrough/desktop-13-practice-second.png",
+      "docs/walkthrough/desktop-14-records-progress.png",
+      "docs/walkthrough/desktop-15-records-songs.png",
+      "docs/walkthrough/desktop-16-song-progress.png",
+      "docs/walkthrough/desktop-17-song-compare.png",
+      "docs/walkthrough/desktop-18-review.png",
+      "docs/walkthrough/desktop-19-tuner.png",
+      "docs/walkthrough/desktop-20-coach-list.png",
+      "docs/walkthrough/desktop-21-coach-setup.png",
+      "docs/walkthrough/desktop-22-coach-live.png",
+      "docs/walkthrough/desktop-23-coach-result.png",
+      "docs/walkthrough/desktop-24-import-done.png",
+      "docs/walkthrough/desktop-25-import-prep.png",
+      "docs/walkthrough/desktop-26-lyrics-sheet.png",
+      "docs/walkthrough/desktop-27-lyrics-persisted.png",
+      "docs/walkthrough/desktop-28-import-practice.png",
+      "docs/walkthrough/desktop-29-import-report.png",
+      "docs/walkthrough/desktop-30-lyrics-delete-entry.png",
+      "docs/walkthrough/desktop-31-lyrics-deleted.png",
+      "docs/walkthrough/desktop-32-settings.png",
+      "docs/walkthrough/desktop-33-calibration.png",
+      "docs/walkthrough/desktop-34-calibration-running.png",
+      "docs/walkthrough/desktop-35-calibration-result.png",
+      "docs/walkthrough/desktop-36-settings-cleared.png",
+      "docs/walkthrough/desktop-37-home-cleared.png"
+    ],
+    "finishedAt": "2026-11-06T15:06:03.448Z",
+    "slowSteps": []
+  }
+]

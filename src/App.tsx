@@ -100,12 +100,12 @@ function App() {
   }
 
   function openCalibration(): void {
-    setSettingsOpen(false)
+    // 保留设置面板留在下层，关闭校准后回到原来的位置
     setCalibrationOpen(true)
   }
 
   function openPrivacy(): void {
-    setSettingsOpen(false)
+    // 从设置里查看隐私说明时，关闭后同样回到设置
     setPrivacyOpen(true)
   }
 
@@ -234,17 +234,26 @@ function App() {
   }
 
   useEffect(() => {
-    // Esc 返回：练唱与回看页各自处理（需要先确认/停止播放），这里管准备页与报告页。
+    // Esc 返回：练唱、回看、循环与练声页各自处理（需要先确认/停止播放），这里管准备页与报告页。
     if (!overlay || settingsOpen) return
     if (
       overlay.kind === 'practice' ||
       overlay.kind === 'review' ||
-      overlay.kind === 'loop'
+      overlay.kind === 'loop' ||
+      overlay.kind === 'coach'
     ) {
       return
     }
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      // 上层弹窗自己处理 Esc，不要连同下层页面一起关掉
+      if (
+        document.querySelector(
+          '.settings-sheet, .calib-layer, .privacy-layer, .lyrics-layer, .share-layer',
+        )
+      ) {
+        return
+      }
       const target = event.target as HTMLElement | null
       if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
       event.preventDefault()

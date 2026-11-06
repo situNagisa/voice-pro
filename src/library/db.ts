@@ -2,6 +2,7 @@ import type { ReferenceMelody } from '../core/types'
 import {
   ANALYSIS_JOB_STORE,
   SONG_AUDIO_STORE,
+  SONG_LYRICS_STORE,
   SONG_MELODY_STORE,
   SONG_STORE,
   openAppDb,
@@ -124,24 +125,32 @@ export async function renameLibrarySong(id: string, name: string): Promise<void>
 export async function deleteLibrarySong(id: string): Promise<void> {
   const db = await openAppDb()
   const tx = db.transaction(
-    [SONG_STORE, SONG_MELODY_STORE, SONG_AUDIO_STORE],
+    [SONG_STORE, SONG_MELODY_STORE, SONG_AUDIO_STORE, SONG_LYRICS_STORE],
     'readwrite',
   )
   tx.objectStore(SONG_STORE).delete(id)
   tx.objectStore(SONG_MELODY_STORE).delete(id)
   tx.objectStore(SONG_AUDIO_STORE).delete(id)
+  tx.objectStore(SONG_LYRICS_STORE).delete(id)
   await transactionDone(tx)
 }
 
 export async function clearLibrary(): Promise<void> {
   const db = await openAppDb()
   const tx = db.transaction(
-    [SONG_STORE, SONG_MELODY_STORE, SONG_AUDIO_STORE, ANALYSIS_JOB_STORE],
+    [
+      SONG_STORE,
+      SONG_MELODY_STORE,
+      SONG_AUDIO_STORE,
+      SONG_LYRICS_STORE,
+      ANALYSIS_JOB_STORE,
+    ],
     'readwrite',
   )
   tx.objectStore(SONG_STORE).clear()
   tx.objectStore(SONG_MELODY_STORE).clear()
   tx.objectStore(SONG_AUDIO_STORE).clear()
+  tx.objectStore(SONG_LYRICS_STORE).clear()
   tx.objectStore(ANALYSIS_JOB_STORE).clear()
   await transactionDone(tx)
 }

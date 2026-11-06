@@ -335,6 +335,7 @@ input[type='range'] {
   color: var(--text-3);
   font-size: var(--fs-sm);
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
   transition:
     background-color 0.16s ease,
@@ -2053,12 +2054,19 @@ input[type='range'] {
   padding: 4px 2px;
 }
 
+.review-hero > div {
+  min-width: 0;
+}
+
 .review-hero h1 {
+  overflow: hidden;
   color: var(--text);
   font-size: 25px;
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .review-hero .muted {
@@ -4456,7 +4464,7 @@ input[type='range'] {
 
   .review-page .review-player .segmented.compact {
     width: auto;
-    min-width: 270px;
+    min-width: 300px;
     flex: none;
   }
 
@@ -6249,6 +6257,10 @@ input[type='range'] {
   background:
     radial-gradient(420px 210px at 100% 0%, rgba(143, 125, 255, 0.16), transparent 70%),
     var(--surface);
+}
+
+.song-progress-hero > div:first-child {
+  min-width: 0;
 }
 
 .song-progress-hero h1 {
@@ -8526,6 +8538,16 @@ input[type='range'] {
     calc(var(--safe-top) + 16px)
     16px
     12px;
+}
+
+/* 导入歌名可能很长，标题必须在关闭按钮前截断，否则会把按钮挤出屏幕 */
+.lyrics-head > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.lyrics-head > .icon-btn {
+  flex: 0 0 auto;
 }
 
 .lyrics-head h2 {

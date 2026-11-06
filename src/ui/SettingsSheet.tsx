@@ -62,7 +62,7 @@ export function SettingsSheet({
   async function clearSongCache(): Promise<void> {
     if (
       !window.confirm(
-        '清空歌曲库？原曲、伴奏和分析结果都会删除，练习记录会保留（回看时只能听录音）。',
+        '清空歌曲库？原曲、伴奏、歌词和分析结果都会删除，练习记录会保留（回看时只能听录音）。',
       )
     ) {
       return

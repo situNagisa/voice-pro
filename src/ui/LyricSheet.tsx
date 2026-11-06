@@ -7,6 +7,7 @@ import type { LoadedSong } from '../state/session'
 import {
   buildLyrics,
   decodeLyricFile,
+  deleteSongLyrics,
   loadSongLyrics,
   normalizeLyricLines,
   saveSongLyrics,
@@ -17,6 +18,7 @@ import {
   CloseIcon,
   PauseIcon,
   PlayIcon,
+  TrashIcon,
   UploadIcon,
 } from './icons'
 
@@ -26,6 +28,8 @@ interface LyricSheetProps {
   initialLyrics?: SongLyrics | null
   onClose: () => void
   onSaved: (lyrics: SongLyrics) => void
+  /** 歌词被删除后通知调用方清掉缓存 */
+  onDeleted?: () => void
 }
 
 type SaveSource = 'lrc' | 'text'
@@ -71,6 +75,7 @@ export function LyricSheet({
   initialLyrics,
   onClose,
   onSaved,
+  onDeleted,
 }: LyricSheetProps) {
   const duration = Math.max(0.5, song.buffer.duration)
   const [lines, setLines] = useState<LyricLine[]>(() =>
@@ -89,6 +94,8 @@ export function LyricSheet({
   const [fileName, setFileName] = useState('')
   const [message, setMessage] = useState<SheetMessage | null>(null)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [hasSaved, setHasSaved] = useState(Boolean(initialLyrics))
   const [playing, setPlaying] = useState(false)
   const [position, setPosition] = useState(0)
   const [loading, setLoading] = useState(initialLyrics === undefined)
@@ -134,6 +141,7 @@ export function LyricSheet({
         setArtist(value.artist ?? '')
         setOffsetMs(value.offsetMs)
         setSelected(value.lines.length > 0 ? 0 : null)
+        setHasSaved(true)
       }
       setLoading(false)
     })
@@ -340,6 +348,7 @@ export function LyricSheet({
     }
     try {
       await saveSongLyrics(record)
+      setHasSaved(true)
       setMessage({ tone: 'success', text: '歌词已保存到本机歌曲库。' })
       onSaved(record)
     } catch (error) {
@@ -347,6 +356,36 @@ export function LyricSheet({
       setMessage({ tone: 'error', text: '保存失败，请检查浏览器存储空间后重试。' })
     } finally {
       if (mountedRef.current) setSaving(false)
+    }
+  }
+
+  async function removeLyrics(): Promise<void> {
+    if (deleting) return
+    if (!window.confirm('删除这首歌的歌词？练习报告与跟唱里的歌词会一并消失，无法恢复。')) {
+      return
+    }
+    setDeleting(true)
+    setMessage(null)
+    try {
+      await deleteSongLyrics(song.id)
+      playerRef.current?.stop()
+      setPlaying(false)
+      setLines([])
+      setTitle('')
+      setArtist('')
+      setOffsetMs(undefined)
+      setDraft('')
+      setFileName('')
+      setPosition(0)
+      setSelected(null)
+      setHasSaved(false)
+      setMessage({ tone: 'success', text: '已删除这首歌的歌词。' })
+      onDeleted?.()
+    } catch (error) {
+      console.warn('[voice-pro] 删除歌词失败', error)
+      setMessage({ tone: 'error', text: '删除失败，请稍后重试。' })
+    } finally {
+      if (mountedRef.current) setDeleting(false)
     }
   }
 
@@ -360,13 +399,25 @@ export function LyricSheet({
         <header className="sheet-head lyrics-head">
           <div>
             <p className="eyebrow">歌词与对时</p>
-            <h2>{song.name}</h2>
+            <h2 title={song.name}>{song.name}</h2>
             <p className="tiny-note">
               {loading
                 ? '正在读取已保存的歌词…'
                 : 'LRC 会直接使用时间标签；纯文本会按字数自动对齐到参考旋律的乐句。'}
             </p>
           </div>
+          {hasSaved && (
+            <button
+              type="button"
+              className="icon-btn danger"
+              aria-label="删除歌词"
+              title="删除歌词"
+              disabled={deleting}
+              onClick={() => void removeLyrics()}
+            >
+              {deleting ? <i className="spinner" /> : <TrashIcon />}
+            </button>
+          )}
           <button type="button" className="icon-btn" aria-label="关闭" onClick={onClose}>
             <CloseIcon />
           </button>

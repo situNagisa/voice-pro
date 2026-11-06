@@ -248,7 +248,7 @@ export function SongsHome({
   async function removeSong(song: LibrarySongMeta): Promise<void> {
     if (
       !window.confirm(
-        `从歌曲库删除「${song.name}」？\n原曲、伴奏和分析结果都会删除；练习记录会保留，但回看时只能听录音。`,
+        `从歌曲库删除「${song.name}」？\n原曲、伴奏、歌词和分析结果都会删除；练习记录会保留，但回看时只能听录音。`,
       )
     ) {
       return

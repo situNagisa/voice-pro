@@ -1214,6 +1214,7 @@ export function PracticeView({
             setLyrics(next)
             setLyricsOpen(false)
           }}
+          onDeleted={() => setLyrics(null)}
         />
       )}
     </div>

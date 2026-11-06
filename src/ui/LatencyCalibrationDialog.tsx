@@ -87,10 +87,14 @@ export function LatencyCalibrationDialog({
   useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && phase !== 'measuring') onClose()
+      if (event.key !== 'Escape' || phase === 'measuring') return
+      // 捕获阶段先关掉校准，避免同一个 Esc 让下层设置 / 准备页也退出
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      onClose()
     }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
   }, [open, phase, onClose])
 
   if (!open) return null
