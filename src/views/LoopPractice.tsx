@@ -763,6 +763,18 @@ export function LoopPracticeView({
                 ) : (
                   <strong className="loop-target-single">{currentTarget?.label ?? label}</strong>
                 )}
+                <div className="loop-tags">
+                  <span>句子 {formatTime(currentTarget?.start ?? 0)} – {formatTime(currentTarget?.end ?? 0)}</span>
+                  <span>句前预备 {(range?.beat ?? 0.55).toFixed(2)} 秒（1 拍）</span>
+                  <span>判定 ±{settings.tolerance} 音分</span>
+                  {targetNotes.length > 0 && (
+                    <span className="loop-note-tags">
+                      {targetNotes.map((note, index) => (
+                        <em key={`${note.start}-${index}`}>{midiToNoteName(note.midi + transpose).label}</em>
+                      ))}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="loop-controls">
                 <Segmented
@@ -803,18 +815,6 @@ export function LoopPracticeView({
                   <span className="field-hint">伴奏与参考旋律一起变调，速度不变</span>
                 </div>
               </div>
-            </div>
-            <div className="loop-tags">
-              <span>句子 {formatTime(currentTarget?.start ?? 0)} – {formatTime(currentTarget?.end ?? 0)}</span>
-              <span>句前预备 {(range?.beat ?? 0.55).toFixed(2)} 秒（1 拍）</span>
-              <span>判定 ±{settings.tolerance} 音分</span>
-              {targetNotes.length > 0 && (
-                <span className="loop-note-tags">
-                  {targetNotes.map((note, index) => (
-                    <em key={`${note.start}-${index}`}>{midiToNoteName(note.midi + transpose).label}</em>
-                  ))}
-                </span>
-              )}
             </div>
           </section>
 

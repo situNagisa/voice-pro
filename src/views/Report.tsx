@@ -4,6 +4,7 @@ import { evaluateSession } from '../audio/analysis'
 import { diagnoseSession } from '../audio/diagnosis'
 import { formatCents, formatTime, midiToNoteName } from '../audio/pitch'
 import { readingAt, recordMelody } from '../audio/review'
+import { practiceSeconds } from '../state/progress'
 import type { PracticeRecord } from '../state/records'
 import type { PracticeLoopTarget } from '../state/session'
 import { TopBar } from '../ui/controls'
@@ -166,7 +167,7 @@ export function ReportView({
             <p>{grade.desc}</p>
             <div className="tag-row">
               <span className="tag">±{record.tolerance} 音分</span>
-              <span className="tag">{record.loop ? '循环练习' : `${formatTime(record.duration)} 完整练习`}</span>
+              <span className="tag">{record.loop ? '循环练习' : `${formatTime(practiceSeconds(record))} 实际练习`}</span>
               {record.transpose !== 0 && (
                 <span className="tag warn">移调 {record.transpose > 0 ? '+' : ''}{record.transpose}</span>
               )}

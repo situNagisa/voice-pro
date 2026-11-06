@@ -645,6 +645,15 @@ export function PracticeView({
     const finalSegments = segmentsRef.current
       .map((segment) => ({ ...segment }))
       .filter((segment) => segment.duration > 0)
+    // 报告与记录列表统一按实际唱过的秒数展示，而不是整首歌的长度
+    const recordedSeconds = finalSegments.reduce(
+      (total, segment) => total + (Number.isFinite(segment.duration) ? Math.max(0, segment.duration) : 0),
+      0,
+    )
+    const practicedSeconds =
+      recordedSeconds > 0
+        ? Math.min(song.buffer.duration || recordedSeconds, recordedSeconds)
+        : undefined
     const record: PracticeRecord = {
       id: newRecordId(),
       createdAt: Date.now(),
@@ -652,6 +661,7 @@ export function PracticeView({
       songName: song.name,
       songKind: song.demoId ? 'demo' : 'imported',
       duration: song.buffer.duration,
+      practicedSeconds,
       score: report.score,
       hitRate: report.hitRate,
       tolerance: settingsRef.current.tolerance,

@@ -52,7 +52,7 @@ function percent(rate: number | null): number | null {
 
 const COLORS = {
   a: '#5aa9f5',
-  b: '#8f7dff',
+  b: '#ffa45c',
   good: '#2ec4a0',
   sharp: '#e8a33d',
   flat: '#5aa9f5',
@@ -65,6 +65,8 @@ interface CompareRollProps {
   recordA: PracticeRecord
   recordB: PracticeRecord
   highlight: { start: number; end: number } | null
+  showA: boolean
+  showB: boolean
 }
 
 /** 把一次练习的音高曲线还原到原调（并做八度对齐），方便两次叠加。 */
@@ -105,11 +107,13 @@ function drawCurve(
   color: string,
   lineWidth: number,
   glow: boolean,
+  dash: number[] = [],
 ): void {
   ctx.strokeStyle = color
   ctx.lineWidth = lineWidth
-  ctx.lineCap = 'round'
+  ctx.lineCap = dash.length > 0 ? 'butt' : 'round'
   ctx.lineJoin = 'round'
+  ctx.setLineDash(dash)
   if (glow) {
     ctx.shadowColor = color
     ctx.shadowBlur = 8
@@ -137,9 +141,10 @@ function drawCurve(
     ctx.stroke()
   }
   ctx.shadowBlur = 0
+  ctx.setLineDash([])
 }
 
-function CompareRoll({ recordA, recordB, highlight }: CompareRollProps) {
+function CompareRoll({ recordA, recordB, highlight, showA, showB }: CompareRollProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
@@ -197,6 +202,10 @@ function CompareRoll({ recordA, recordB, highlight }: CompareRollProps) {
         lo = Math.floor(center - 16)
         hi = lo + 32
       }
+      // 上下各留几个半音的边距，避免音头或下滑段贴着画布边缘被裁掉
+      const pad = Math.max(2, Math.round((hi - lo) * 0.1))
+      lo -= pad
+      hi += pad
       const span = Math.max(6, hi - lo)
       const rowHeight = plotHeight / span
       const xFor = (time: number) => plotLeft + (time / duration) * plotWidth
@@ -218,16 +227,19 @@ function CompareRoll({ recordA, recordB, highlight }: CompareRollProps) {
 
       for (let midi = Math.ceil(lo); midi <= Math.floor(hi); midi++) {
         const y = yFor(midi)
-        const isC = ((midi % 12) + 12) % 12 === 0
+        const pitchClass = ((midi % 12) + 12) % 12
+        const isC = pitchClass === 0
+        const isNatural = [2, 4, 5, 7, 9, 11].includes(pitchClass)
         ctx.strokeStyle = isC ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.06)'
         ctx.lineWidth = 1
         ctx.beginPath()
         ctx.moveTo(plotLeft, Math.round(y) + 0.5)
         ctx.lineTo(width, Math.round(y) + 0.5)
         ctx.stroke()
-        if (isC) {
-          ctx.fillStyle = 'rgba(180,187,203,0.65)'
-          ctx.font = '600 10px system-ui, -apple-system, "PingFang SC", sans-serif'
+        // 每个 C 都标注；空间够时补上其他自然音，读谱时不至于只看到孤零零一个音名
+        if (isC || (isNatural && rowHeight >= 9)) {
+          ctx.fillStyle = isC ? 'rgba(203,213,230,0.82)' : 'rgba(180,187,203,0.55)'
+          ctx.font = `${isC ? 700 : 500} 10px system-ui, -apple-system, "PingFang SC", sans-serif`
           ctx.textAlign = 'right'
           ctx.textBaseline = 'middle'
           ctx.fillText(midiToNoteName(midi).label, plotLeft - 5, y)
@@ -254,16 +266,21 @@ function CompareRoll({ recordA, recordB, highlight }: CompareRollProps) {
         const x1 = xFor(note.start + 0.01)
         const x2 = xFor(note.end - 0.01)
         const barHeight = Math.max(4, Math.min(10, rowHeight * 0.5))
+        const barWidth = Math.max(2, x2 - x1)
+        // 很短的音符宽度可能不到 2px，圆角必须跟着收，否则两端圆弧会叠成“∞”
+        const radius = Math.min(3, barWidth / 2, barHeight / 2)
         ctx.fillStyle = COLORS.bar
         ctx.strokeStyle = COLORS.barStroke
         ctx.lineWidth = 1
         ctx.beginPath()
-        ctx.roundRect(x1, y - barHeight / 2, Math.max(2, x2 - x1), barHeight, 3)
+        ctx.roundRect(x1, y - barHeight / 2, barWidth, barHeight, radius)
         ctx.fill()
         ctx.stroke()
       }
 
-      if (curveA.length === 0 && curveB.length === 0) {
+      const visibleA = showA ? curveA : []
+      const visibleB = showB ? curveB : []
+      if (visibleA.length === 0 && visibleB.length === 0) {
         ctx.fillStyle = 'rgba(200,211,231,0.5)'
         ctx.font = '13px system-ui, -apple-system, "PingFang SC", sans-serif'
         ctx.textAlign = 'center'
@@ -271,8 +288,8 @@ function CompareRoll({ recordA, recordB, highlight }: CompareRollProps) {
         ctx.fillText('这两次练习都没有可绘制的有效音高', plotLeft + plotWidth / 2, plotTop + plotHeight / 2)
       }
 
-      drawCurve(ctx, curveA, xFor, yFor, COLORS.a, 1.6, false)
-      drawCurve(ctx, curveB, xFor, yFor, COLORS.b, 2.4, true)
+      drawCurve(ctx, visibleA, xFor, yFor, COLORS.a, 2, false)
+      drawCurve(ctx, visibleB, xFor, yFor, COLORS.b, 2.4, false, [7, 5])
       ctx.restore()
 
       // 时间刻度：根据可用宽度挑选不重叠的间隔
@@ -310,7 +327,7 @@ function CompareRoll({ recordA, recordB, highlight }: CompareRollProps) {
       cancelAnimationFrame(frame)
       observer.disconnect()
     }
-  }, [recordA, recordB, highlight])
+  }, [recordA, recordB, highlight, showA, showB])
 
   return (
     <div className="compare-roll" ref={wrapRef}>
@@ -336,6 +353,8 @@ export function SongProgressView({
   const [loadError, setLoadError] = useState(false)
   const [highlight, setHighlight] = useState<{ start: number; end: number } | null>(null)
   const [failed, setFailed] = useState<Record<string, true>>({})
+  const [showA, setShowA] = useState(true)
+  const [showB, setShowB] = useState(true)
 
   useEffect(() => {
     if (attempts.length === 0) return
@@ -547,10 +566,26 @@ export function SongProgressView({
               <p>选两次练习，把音高曲线叠在一起；默认是第一次与最近一次</p>
             </div>
             {canCompare && (
-              <span className="compare-legend">
-                <i className="legend-a" /> A
-                <i className="legend-b" /> B
-              </span>
+              <div className="compare-legend" role="group" aria-label="切换显示的对比曲线">
+                <button
+                  type="button"
+                  className={showA ? 'active' : 'off'}
+                  aria-pressed={showA}
+                  onClick={() => setShowA((current) => (current ? !showB : true))}
+                >
+                  <i className="legend-a" />
+                  A 实线
+                </button>
+                <button
+                  type="button"
+                  className={showB ? 'active' : 'off'}
+                  aria-pressed={showB}
+                  onClick={() => setShowB((current) => (current ? !showA : true))}
+                >
+                  <i className="legend-b" />
+                  B 虚线
+                </button>
+              </div>
             )}
           </div>
 
@@ -651,13 +686,19 @@ export function SongProgressView({
                 </div>
               </div>
 
-              <CompareRoll recordA={recordA} recordB={recordB} highlight={highlight} />
+              <CompareRoll
+                recordA={recordA}
+                recordB={recordB}
+                highlight={highlight}
+                showA={showA}
+                showB={showB}
+              />
 
               <div className="compare-foot">
                 <span className="tiny-note">
                   {highlightPhrase
                     ? `正在看第 ${highlightPhrase.index + 1} 句 · 点同一句可取消高亮`
-                    : 'A 为蓝色、B 为紫色；两条曲线都已还原到原调并做八度对齐。点下方句子可高亮对应时间。'}
+                    : 'A 为蓝色实线、B 为橙色虚线；两条曲线都已还原到原调并做八度对齐。点图例可只看一条，点下方句子可高亮对应时间。'}
                 </span>
                 {aMeta && (
                   <button type="button" className="text-btn" onClick={() => onOpenRecord(aMeta.id)}>
