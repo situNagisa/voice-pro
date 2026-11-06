@@ -110,6 +110,12 @@ export function ReviewView({
   useEffect(() => {
     // 从记录列表进入时：示例歌重新合成，导入歌从歌曲库读取；歌被删掉就降级为只听录音。
     if (initialSong) return
+    if (record.songKind === 'exercise') {
+      setSourceLoading(false)
+      setSourceError(null)
+      setLibraryMissing(false)
+      return
+    }
     let active = true
     setSourceLoading(true)
     setSourceError(null)
@@ -258,6 +264,7 @@ export function ReviewView({
       voiceOffset,
       mode: effectiveMode,
       volume: 0.92,
+      semitones: record.transpose,
     })
     if (mountedRef.current) setPlaying(clip.playing)
   }
@@ -383,7 +390,15 @@ export function ReviewView({
       <main className="page review-page">
         <section className="review-hero">
           <div>
-            <p className="eyebrow">{record.songKind === 'demo' ? '示例歌' : '导入歌'} · {record.loop ? '循环练习' : '完整练习'}</p>
+            <p className="eyebrow">
+              {record.songKind === 'exercise'
+                ? '练声小课'
+                : record.songKind === 'demo'
+                  ? '示例歌'
+                  : '导入歌'}
+              {' · '}
+              {record.loop ? '循环练习' : record.songKind === 'exercise' ? '练声记录' : '完整练习'}
+            </p>
             <h1>{record.songName}</h1>
             <p className="muted">
               {dateLabel(record.createdAt)} · 命中率 {hitPercent == null ? '—' : `${hitPercent}%`} · ±{record.tolerance} 音分
@@ -418,7 +433,11 @@ export function ReviewView({
                 >
                   循环练这句 · 1 拍预备
                 </button>
-                {!song && <span className="tiny-note">原唱/伴奏加载后可循环</span>}
+                {!song && (
+                  <span className="tiny-note">
+                    {record.songKind === 'exercise' ? '练声记录没有整首伴奏，不能循环' : '原唱/伴奏加载后可循环'}
+                  </span>
+                )}
               </div>
             )}
           </section>
@@ -436,7 +455,11 @@ export function ReviewView({
                 >
                   循环练这句 · 1 拍预备
                 </button>
-                {!song && <span className="tiny-note">原唱/伴奏加载后可循环</span>}
+                {!song && (
+                  <span className="tiny-note">
+                    {record.songKind === 'exercise' ? '练声记录没有整首伴奏，不能循环' : '原唱/伴奏加载后可循环'}
+                  </span>
+                )}
               </div>
             )}
           </section>
@@ -479,11 +502,13 @@ export function ReviewView({
                 ? record.songKind === 'demo'
                   ? '正在准备原唱…'
                   : '正在从歌曲库读取…'
-                : accompanimentBuffer
-                  ? '伴奏已就绪'
-                  : originalBuffer
-                    ? '原曲已就绪'
-                    : '原唱不可用，仅能回放录音'}
+                : record.songKind === 'exercise'
+                  ? '练声记录没有音频，只能看音高曲线'
+                  : accompanimentBuffer
+                    ? '伴奏已就绪'
+                    : originalBuffer
+                      ? '原曲已就绪'
+                      : '原唱不可用，仅能回放录音'}
             </span>
           </div>
           <div className="segmented compact review-modes" role="group" aria-label="回放内容">
@@ -532,7 +557,12 @@ export function ReviewView({
                 : '这条记录来自旧版本，重新导入也只会关联新的练习记录。'}
             </p>
           )}
-          {!record.voice && <p className="tiny-note">这次练习没有保存到录音。</p>}
+          {!record.voice && record.songKind === 'exercise' && (
+            <p className="tiny-note">练声小课只保存目标音与音高轨迹，不保存麦克风录音。</p>
+          )}
+          {!record.voice && record.songKind !== 'exercise' && (
+            <p className="tiny-note">这次练习没有保存到录音。</p>
+          )}
         </section>
 
         <section className="section-block">

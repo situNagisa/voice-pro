@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   acknowledgeLibraryJob,
   clearLibrary,
+  discardLibraryJob,
   formatBytes,
   getLibraryUsage,
 } from '../library'
@@ -63,6 +64,7 @@ export function SettingsSheet({
     }
     try {
       await clearLibrary()
+      discardLibraryJob()
       acknowledgeLibraryJob()
       setUsage({ count: 0, bytes: 0, sourceBytes: 0, audioBytes: 0, melodyBytes: 0 })
       onLibraryCleared()
@@ -128,12 +130,12 @@ export function SettingsSheet({
               max={6}
               onChange={(value) => onPatch({ transpose: value })}
               format={(value) => `${value > 0 ? '+' : ''}${value} 半音`}
-              hint="参考旋律、伴奏与原曲会一起变调（保持速度）。进入练唱后本次练习会锁定当时的移调。"
+              hint="参考旋律、伴奏与原曲会一起变调（保持速度）。练唱页里也可以随时升降调。"
             />
             {settings.transpose !== 0 && (
               <Notice tone="warn">
                 已移调 {settings.transpose > 0 ? '+' : ''}
-                {settings.transpose} 半音。开始练唱时会花几秒准备变调伴奏；循环练习里可以随时再调。
+                {settings.transpose} 半音。实时变调切换不需要等待；不支持 AudioWorklet 的设备会自动按原方式预先处理。
               </Notice>
             )}
           </section>

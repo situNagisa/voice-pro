@@ -8,6 +8,15 @@ export interface RawUserPoint {
   f0: number
   midi: number
   clarity: number
+  /** 采样时参考旋律的移调（半音）。中途改调时逐点记录，旧记录没有这个字段。 */
+  shift?: number
+}
+
+/** 取一条采样对应的参考移调；旧记录回退到整次练习的移调。 */
+export function pointTranspose(point: RawUserPoint, fallback: number): number {
+  return typeof point.shift === 'number' && Number.isFinite(point.shift)
+    ? point.shift
+    : fallback
 }
 
 export type Severity = 'good' | 'warn' | 'bad' | 'neutral'
@@ -279,7 +288,7 @@ function evaluateRange(
   const to = range ? lowerBound(points, range.end + 0.02 + 1e-9) : points.length
   for (let i = from; i < to; i++) {
     const point = points[i]
-    const target = referenceMidiAt(melody, point.t, options.transpose)
+    const target = referenceMidiAt(melody, point.t, pointTranspose(point, options.transpose))
     if (target == null) continue
     const comparison = compareToTarget(
       point.midi,

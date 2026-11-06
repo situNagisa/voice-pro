@@ -1,17 +1,23 @@
 import { analyzeSongAudio } from './analyze'
-import {
-  ACCOMPANIMENT_RATE,
-  VOCALS_RATE,
-  encodeTrack,
-} from './audioStore'
+import { encodeAccompaniment, encodeVocals } from './audioStore'
 import {
   estimateMelodyBytes,
   findLibrarySong,
   saveLibrarySong,
 } from './db'
 import { hashFile } from './hash'
+import {
+  deleteAnalysisJob,
+  loadLatestAnalysisJob,
+  saveAnalysisJob,
+} from './jobStore'
 
-export type LibraryJobStatus = 'running' | 'done' | 'error' | 'cancelled'
+export type LibraryJobStatus =
+  | 'running'
+  | 'done'
+  | 'error'
+  | 'cancelled'
+  | 'pending'
 
 /** 后台导入任务快照。组件卸载、切到音准仪都不会中止任务。 */
 export interface LibraryJobSnapshot {
@@ -29,6 +35,8 @@ export interface LibraryJobSnapshot {
   error: string | null
   /** 首页提示是否已被用户确认；确认后再次回到首页不再弹出 */
   acknowledged: boolean
+  /** 原文件在本机，可以继续/重试分析 */
+  resumable: boolean
 }
 
 type Listener = () => void
@@ -36,6 +44,9 @@ type Listener = () => void
 const listeners = new Set<Listener>()
 let currentJob: LibraryJobSnapshot | null = null
 let activeController: AbortController | null = null
+let activeFile: File | null = null
+let activeSongId: string | null = null
+let staleJobId: string | null = null
 
 function emit(): void {
   for (const listener of listeners) {
@@ -60,7 +71,14 @@ export function getLibraryJobSnapshot(): LibraryJobSnapshot | null {
 
 /** 用户已经看到完成/失败提示，之后回到首页不再重复弹出。 */
 export function acknowledgeLibraryJob(): void {
-  if (!currentJob || currentJob.status === 'running' || currentJob.acknowledged) return
+  if (
+    !currentJob ||
+    currentJob.status === 'running' ||
+    currentJob.status === 'pending' ||
+    currentJob.acknowledged
+  ) {
+    return
+  }
   currentJob = { ...currentJob, acknowledged: true }
   emit()
 }
@@ -77,11 +95,18 @@ export function cancelLibraryImport(): void {
   activeController.abort()
 }
 
+/**
+ * 启动一次新的导入。已有任务在跑，或还有一个“上次未完成”等着用户决定时，
+ * 不允许覆盖，避免把原文件从 IndexedDB 里挤掉。
+ */
 export function startLibraryImport(
   file: File,
   precomputedHash?: string,
 ): boolean {
-  if (currentJob?.status === 'running') return false
+  if (currentJob?.status === 'running' || currentJob?.status === 'pending') {
+    return false
+  }
+  staleJobId = currentJob?.status === 'error' ? activeSongId : null
   const songName =
     (file.name.replace(/\.[^.]+$/, '').trim() || '未命名歌曲').slice(0, 60)
   currentJob = {
@@ -96,12 +121,123 @@ export function startLibraryImport(
     songId: null,
     error: null,
     acknowledged: false,
+    resumable: true,
   }
+  activeFile = file
+  activeSongId = precomputedHash ?? null
   emit()
   const controller = new AbortController()
   activeController = controller
   void runImport(file, songName, controller, precomputedHash)
   return true
+}
+
+/** 重新打开 App 后，把 IndexedDB 里未完成的任务恢复成“待继续”。 */
+export async function restoreLibraryJob(): Promise<void> {
+  if (currentJob) return
+  const stored = await loadLatestAnalysisJob()
+  if (!stored || currentJob) return
+  try {
+    const existing = await findLibrarySong(stored.id)
+    if (currentJob) return
+    if (existing) {
+      await deleteAnalysisJob(stored.id).catch(() => undefined)
+      return
+    }
+  } catch {
+    // 读取歌曲库失败时仍然允许继续分析
+  }
+  if (currentJob) return
+  let file: File
+  try {
+    file = new File([stored.file], stored.fileName, { type: stored.fileType })
+  } catch (error) {
+    console.warn('[voice-pro] 无法还原上次的音频文件', error)
+    await deleteAnalysisJob(stored.id).catch(() => undefined)
+    return
+  }
+  activeFile = file
+  activeSongId = stored.id
+  currentJob = {
+    status: 'pending',
+    fileName: stored.fileName,
+    songName: stored.songName,
+    stage: '上次分析未完成',
+    ratio: stored.ratio ?? 0,
+    etaSec: null,
+    startedAt: stored.startedAt,
+    finishedAt: null,
+    songId: null,
+    error: null,
+    acknowledged: false,
+    resumable: true,
+  }
+  emit()
+}
+
+/** 继续（或重试）上次没做完的分析。 */
+export function resumeLibraryImport(): boolean {
+  if (!activeFile || !currentJob) return false
+  if (currentJob.status !== 'pending' && currentJob.status !== 'error') return false
+  const file = activeFile
+  const songName = currentJob.songName
+  const id = activeSongId ?? undefined
+  currentJob = {
+    ...currentJob,
+    status: 'running',
+    stage: '正在继续上次的分析…',
+    ratio: 0.02,
+    etaSec: null,
+    finishedAt: null,
+    error: null,
+    acknowledged: false,
+    resumable: true,
+  }
+  emit()
+  const controller = new AbortController()
+  activeController = controller
+  void runImport(file, songName, controller, id)
+  return true
+}
+
+/** 用户放弃未完成的分析：删除原文件，不再提示。 */
+export function discardLibraryJob(): boolean {
+  if (currentJob?.status === 'running') return false
+  const id = activeSongId
+  currentJob = null
+  activeFile = null
+  activeSongId = null
+  if (id) void deleteAnalysisJob(id).catch(() => undefined)
+  emit()
+  return true
+}
+
+async function persistCurrentFile(id: string, file: File, songName: string): Promise<void> {
+  if (!currentJob) return
+  try {
+    await saveAnalysisJob({
+      id,
+      fileName: file.name,
+      fileType: file.type,
+      songName,
+      file,
+      stage: currentJob.stage,
+      ratio: currentJob.ratio,
+      startedAt: currentJob.startedAt,
+      updatedAt: Date.now(),
+      status: 'running',
+    })
+  } catch (error) {
+    // 存储配额不足时不阻断本次分析，只是刷新后无法续跑
+    console.warn('[voice-pro] 保存未完成分析任务失败，刷新后无法继续', error)
+  }
+}
+
+async function finishWithSavedSong(id: string, songName: string): Promise<void> {
+  await deleteAnalysisJob(id).catch(() => undefined)
+  activeFile = null
+  activeSongId = null
+  finishDone(id, songName)
 }
 
 async function runImport(
@@ -111,14 +247,25 @@ async function runImport(
   precomputedHash?: string,
 ): Promise<void> {
   let separationStartedAt = 0
+  let id: string | null = precomputedHash ?? activeSongId
   try {
-    const id = precomputedHash ?? (await hashFile(file))
+    if (!id) {
+      id = await hashFile(file)
+    }
+    activeSongId = id
+    if (staleJobId && staleJobId !== id) {
+      await deleteAnalysisJob(staleJobId).catch(() => undefined)
+    }
+    staleJobId = null
     throwIfAborted(controller.signal)
+
+    // 先把原文件和“未完成”状态落盘，刷新/重开 App 后可以继续。
+    await persistCurrentFile(id, file, songName)
 
     // 另一个入口可能刚好先把同一首歌写进了库。
     const existing = await findLibrarySong(id)
     if (existing) {
-      finishDone(existing.id, existing.name)
+      await finishWithSavedSong(existing.id, existing.name)
       return
     }
 
@@ -176,16 +323,22 @@ async function runImport(
     let vocals: Blob | null = null
     let encodeWarning: string | undefined
     if (analysis.accompaniment && analysis.vocals) {
-      update({ stage: '正在压缩保存伴奏与人声…', ratio: 0.94, etaSec: null })
+      update({ stage: '正在压缩伴奏（立体声）…', ratio: 0.94, etaSec: null })
       try {
-        const [accompanimentBlob, vocalsBlob] = await Promise.all([
-          encodeTrack(analysis.accompaniment, ACCOMPANIMENT_RATE),
-          encodeTrack(analysis.vocals, VOCALS_RATE),
-        ])
-        accompaniment = accompanimentBlob
-        vocals = vocalsBlob
+        const accompanimentTrack = await encodeAccompaniment(analysis.accompaniment)
+        throwIfAborted(controller.signal)
+        update({ stage: '正在压缩人声…', ratio: 0.96, etaSec: null })
+        const vocalsTrack = await encodeVocals(analysis.vocals)
+        accompaniment = accompanimentTrack.blob
+        vocals = vocalsTrack.blob
+        if (accompanimentTrack.codec === 'wav' || vocalsTrack.codec === 'wav') {
+          encodeWarning =
+            '当前设备不支持 Opus 压缩，分轨按 16-bit WAV 保存，占用空间会大一些。'
+        }
       } catch (error) {
         console.warn('[voice-pro] 分轨压缩失败，只保存原曲与旋律', error)
+        accompaniment = null
+        vocals = null
         encodeWarning = '伴奏压缩失败，这首歌暂时只能用原曲跟唱。'
       }
     }
@@ -219,9 +372,12 @@ async function runImport(
       analysis.melody,
       { id, source: file, accompaniment, vocals },
     )
-    finishDone(id, meta.name)
+    await finishWithSavedSong(id, meta.name)
   } catch (error) {
     if (controller.signal.aborted || isAbortError(error)) {
+      if (id) await deleteAnalysisJob(id).catch(() => undefined)
+      activeFile = null
+      activeSongId = null
       currentJob = {
         ...(currentJob as LibraryJobSnapshot),
         status: 'cancelled',
@@ -229,6 +385,7 @@ async function runImport(
         finishedAt: Date.now(),
         ratio: 0,
         etaSec: null,
+        resumable: false,
       }
       emit()
       return
@@ -241,6 +398,7 @@ async function runImport(
       error: importErrorMessage(error),
       finishedAt: Date.now(),
       etaSec: null,
+      resumable: activeFile != null,
     }
     emit()
   } finally {
@@ -260,6 +418,8 @@ function finishDone(songId: string, songName: string): void {
     songName,
     finishedAt: Date.now(),
     error: null,
+    acknowledged: false,
+    resumable: false,
   }
   emit()
 }

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { PointerEvent as ReactPointerEvent, RefObject } from 'react'
-import { compareToTarget, referenceMidiAt } from '../audio/analysis'
+import { compareToTarget, pointTranspose, referenceMidiAt } from '../audio/analysis'
 import type { RawUserPoint } from '../audio/analysis'
 import { centsFromNearestNote, clamp, formatCents, freqToMidi, midiToNoteName } from '../audio/pitch'
 import type { ReferenceMelody } from '../core/types'
@@ -429,7 +429,8 @@ export function PitchRoll(props: PitchRollProps) {
               ? COLORS.sharp
               : COLORS.flat
         } else {
-          const target = p.melody ? referenceMidiAt(p.melody, point.t, p.transpose) : null
+          const shift = pointTranspose(point, p.transpose)
+          const target = p.melody ? referenceMidiAt(p.melody, point.t, shift) : null
           if (target == null) {
             color = COLORS.neutral
           } else {
@@ -533,7 +534,8 @@ export function PitchRoll(props: PitchRollProps) {
             const plotMidi = p.mode === 'free'
               ? point.midi
               : (() => {
-                  const target = p.melody ? referenceMidiAt(p.melody, point.t, p.transpose) : null
+                  const shift = pointTranspose(point, p.transpose)
+                  const target = p.melody ? referenceMidiAt(p.melody, point.t, shift) : null
                   if (target == null) return point.midi
                   return point.midi + compareToTarget(point.midi, target, p.octaveAlign, p.tolerance).octaveShift * 12
                 })()
@@ -569,7 +571,8 @@ export function PitchRoll(props: PitchRollProps) {
             if (p.mode === 'free') {
               cents = centsFromNearestNote(point.midi)
             } else if (p.melody) {
-              const target = referenceMidiAt(p.melody, point.t, p.transpose)
+              const shift = pointTranspose(point, p.transpose)
+              const target = referenceMidiAt(p.melody, point.t, shift)
               if (target != null) {
                 const comparison = compareToTarget(point.midi, target, p.octaveAlign, p.tolerance)
                 cents = comparison.cents

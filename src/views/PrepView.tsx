@@ -191,7 +191,7 @@ export function PrepView({
             max={6}
             onChange={(value) => onPatchSettings({ transpose: value })}
             format={(value) => `${value > 0 ? '+' : ''}${value} 半音`}
-            hint="参考旋律、伴奏与原曲一起变调，速度不变；示例歌与导入歌都支持。"
+            hint="参考旋律、伴奏与原曲一起变调，速度不变；练唱中也能随时再改。"
           />
           <div className="prep-tip">
             <HeadphonesIcon />

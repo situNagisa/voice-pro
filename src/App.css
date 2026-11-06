@@ -4888,6 +4888,35 @@ input[type='range'] {
   font-size: 10px;
 }
 
+.practice-key {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.practice-key .field-label {
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.practice-key .stepper {
+  width: auto;
+  border-radius: 9px;
+}
+
+.practice-key .stepper button {
+  width: 30px;
+  height: 28px;
+  font-size: 17px;
+}
+
+.practice-key .stepper output {
+  min-width: 34px;
+  padding: 0 4px;
+  font-size: 11.5px;
+}
+
 @media (min-width: 1024px) {
   .library-list {
     display: grid;
@@ -5673,4 +5702,1967 @@ input[type='range'] {
 
 .sheet-section a.text-btn {
   text-decoration: none;
+}
+
+/* ==================================================================
+   我的进步 / 同歌对比 / 练声小课 / 分享成绩卡
+   ================================================================== */
+
+/* ---------------- 记录：我的进步 ---------------- */
+
+.progress-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  overflow: hidden;
+  background:
+    radial-gradient(520px 260px at 90% 0%, rgba(143, 125, 255, 0.14), transparent 72%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 40%),
+    var(--surface);
+}
+
+.progress-overview-loading {
+  gap: 10px;
+}
+
+.progress-overview-loading .record-skeleton {
+  height: 54px;
+}
+
+.progress-overview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.progress-overview-head h2 {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.period-switch {
+  width: auto;
+  flex: none;
+  align-self: flex-start;
+}
+
+.progress-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.progress-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.progress-stats strong {
+  color: var(--text);
+  font-size: 19px;
+  font-weight: 720;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-stats span {
+  color: var(--text-3);
+  font-size: 10px;
+}
+
+.progress-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.progress-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.022);
+}
+
+.progress-block-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.progress-block-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.progress-block-head strong {
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 660;
+}
+
+.progress-block-head small {
+  color: var(--text-4);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.trend-delta {
+  flex: none;
+  max-width: 46%;
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-2);
+  font-size: 9.5px;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.trend-delta.good {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.trend-delta.warn {
+  background: var(--sharp-soft);
+  color: var(--sharp);
+}
+
+.progress-foot {
+  color: var(--text-4);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.mini-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 13px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.mini-empty strong {
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 640;
+}
+
+.mini-empty span {
+  color: var(--text-3);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.mini-empty.good strong {
+  color: var(--good);
+}
+
+.issue-skeletons {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.issue-skeletons span {
+  height: 58px;
+  border-radius: 11px;
+  background: linear-gradient(100deg, var(--surface) 20%, var(--surface-2) 40%, var(--surface) 60%);
+  background-size: 220% 100%;
+  animation: shimmer 1.3s ease-in-out infinite;
+}
+
+.mini-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.mini-issues li {
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent-strong);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.mini-issues li.tone-flat {
+  border-left-color: var(--flat);
+}
+
+.mini-issues li.tone-sharp {
+  border-left-color: var(--sharp);
+}
+
+.mini-issues li.tone-warn {
+  border-left-color: var(--accent-strong);
+}
+
+.mini-issue-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.mini-issue-head strong {
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 640;
+}
+
+.mini-issue-count {
+  margin-left: auto;
+  color: var(--text-4);
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+
+.mini-issues p {
+  margin-top: 3px;
+  padding-left: 15px;
+  color: var(--text-3);
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+
+/* ---------------- 折线图 ---------------- */
+
+.trend-chart {
+  width: 100%;
+}
+
+.trend-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.trend-grid {
+  stroke: rgba(255, 255, 255, 0.07);
+  stroke-dasharray: 3 5;
+}
+
+.trend-y-label,
+.trend-x-label {
+  fill: var(--text-4);
+  font-size: 9px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.trend-line {
+  fill: none;
+  stroke: var(--accent-strong);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.trend-dot {
+  fill: var(--surface);
+  stroke: var(--accent-strong);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.trend-stop-top {
+  stop-color: rgba(143, 125, 255, 0.28);
+}
+
+.trend-stop-bottom {
+  stop-color: rgba(143, 125, 255, 0);
+}
+
+.trend-chart.good .trend-line {
+  stroke: var(--good);
+}
+
+.trend-chart.good .trend-dot {
+  stroke: var(--good);
+}
+
+.trend-chart.good .trend-stop-top {
+  stop-color: rgba(46, 196, 160, 0.28);
+}
+
+.trend-chart.good .trend-stop-bottom {
+  stop-color: rgba(46, 196, 160, 0);
+}
+
+/* ---------------- 音域钢琴键 ---------------- */
+
+.piano-range {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.piano-keys {
+  position: relative;
+  display: flex;
+  height: 72px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+  background: #0d1016;
+}
+
+.piano-key.white {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 100%;
+  padding-bottom: 4px;
+  border-right: 1px solid #0b0d12;
+  background: linear-gradient(180deg, #eef1f7, #cbd2df);
+  color: #4b5568;
+}
+
+.piano-key.white:last-of-type {
+  border-right: 0;
+}
+
+.piano-key.white em {
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.piano-key.white.active {
+  background: linear-gradient(180deg, #c3b8ff, #8f7dff);
+  color: #171326;
+}
+
+.piano-key.black {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  height: 58%;
+  border-radius: 0 0 3px 3px;
+  background: linear-gradient(180deg, #202632, #07090d);
+  transform: translateX(-50%);
+}
+
+.piano-key.black.active {
+  background: linear-gradient(180deg, #a596ff, #6d5cf0);
+}
+
+.piano-caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-3);
+  font-size: 10px;
+}
+
+.piano-caption strong {
+  color: var(--text);
+  font-weight: 650;
+}
+
+/* ---------------- 记录：按歌曲 ---------------- */
+
+.song-group-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 9px;
+}
+
+.song-group-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background:
+    linear-gradient(120deg, rgba(143, 125, 255, 0.07), transparent 62%),
+    var(--surface);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    transform 0.14s ease;
+}
+
+.song-group-card:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
+
+.song-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.song-group-head strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--fs-base);
+  font-weight: 660;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.score-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  height: 26px;
+  flex: none;
+  padding: 0 8px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-pill.good {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.score-pill.warn {
+  background: var(--sharp-soft);
+  color: var(--sharp);
+}
+
+.score-pill.low {
+  background: rgba(240, 122, 132, 0.12);
+  color: #f08a94;
+}
+
+.song-group-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  color: var(--text-3);
+  font-size: 10px;
+}
+
+.song-group-meta em {
+  margin-left: 2px;
+  font-style: normal;
+  font-weight: 650;
+}
+
+.song-group-meta em.good {
+  color: var(--good);
+}
+
+.song-group-meta em.warn {
+  color: var(--sharp);
+}
+
+.song-sparkline {
+  display: block;
+  width: 100%;
+  height: 42px;
+}
+
+.song-sparkline path {
+  fill: none;
+  stroke: var(--accent-strong);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.song-sparkline circle {
+  fill: var(--surface);
+  stroke: var(--accent-strong);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.song-sparkline.empty {
+  height: auto;
+  padding: 11px 0;
+  color: var(--text-4);
+  font-size: 10px;
+}
+
+.song-group-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 2px;
+  color: var(--accent-strong);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.song-group-action svg {
+  width: 13px;
+  height: 13px;
+}
+
+.records-history .record-list {
+  margin-top: 2px;
+}
+
+/* ---------------- 歌曲进步：历次得分与叠加对比 ---------------- */
+
+.song-progress-page {
+  gap: 13px;
+}
+
+.song-progress-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 17px 18px;
+  background:
+    radial-gradient(420px 210px at 100% 0%, rgba(143, 125, 255, 0.16), transparent 70%),
+    var(--surface);
+}
+
+.song-progress-hero h1 {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 25px;
+  font-weight: 710;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song-progress-hero p:not(.eyebrow) {
+  margin-top: 3px;
+  color: var(--text-3);
+  font-size: 10.5px;
+}
+
+.song-progress-hero p .good {
+  color: var(--good);
+}
+
+.song-progress-hero p .warn {
+  color: var(--sharp);
+}
+
+.song-progress-stats {
+  display: flex;
+  gap: 14px;
+  flex: none;
+}
+
+.song-progress-stats > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.song-progress-stats span {
+  color: var(--text-4);
+  font-size: 9.5px;
+}
+
+.song-progress-stats strong {
+  color: var(--text);
+  font-size: 25px;
+  font-weight: 730;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+
+.song-score-card,
+.song-compare-card,
+.song-phrase-compare {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 15px;
+}
+
+.song-score-card .trend-chart {
+  margin-top: 1px;
+}
+
+.compare-legend {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  padding-top: 2px;
+  color: var(--text-3);
+  font-size: 10px;
+}
+
+.compare-legend i {
+  display: inline-block;
+  width: 12px;
+  height: 3px;
+  margin-left: 5px;
+  border-radius: 2px;
+}
+
+.compare-legend .legend-a {
+  background: #5aa9f5;
+}
+
+.compare-legend .legend-b {
+  background: #8f7dff;
+}
+
+.compare-pickers {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: 8px;
+}
+
+.compare-pickers label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.compare-pickers label > span {
+  color: var(--text-3);
+  font-size: 10px;
+}
+
+.compare-pickers select {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.compare-vs {
+  padding-bottom: 12px;
+  color: var(--text-4);
+  font-size: 10px;
+}
+
+.compare-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.compare-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.compare-card.a {
+  border-color: rgba(90, 169, 245, 0.24);
+}
+
+.compare-card.b {
+  border-color: rgba(143, 125, 255, 0.28);
+}
+
+.compare-tag {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--flat-soft);
+  color: var(--flat);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.compare-card.b .compare-tag {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.compare-card > div:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.compare-card > div:nth-child(2) strong {
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.compare-card > div:nth-child(2) span {
+  overflow: hidden;
+  color: var(--text-4);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compare-card-stats {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 10px;
+  color: var(--text-2);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.compare-roll {
+  height: 260px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #10141c;
+}
+
+.compare-roll canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.compare-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 180px;
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+.compare-foot {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.compare-foot .text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--accent-strong);
+  font-size: 10.5px;
+}
+
+.compare-foot .text-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.phrase-compare-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  flex: none;
+  font-size: 9.5px;
+}
+
+.phrase-compare-summary span {
+  padding: 3px 7px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-3);
+}
+
+.phrase-compare-summary .good {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.phrase-compare-summary .warn {
+  background: var(--sharp-soft);
+  color: var(--sharp);
+}
+
+.phrase-compare-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.phrase-compare-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'title delta'
+    'bars bars';
+  gap: 6px 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: rgba(0, 0, 0, 0.14);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.phrase-compare-row:hover {
+  border-color: var(--line-strong);
+}
+
+.phrase-compare-row.active {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+
+.phrase-compare-title {
+  grid-area: title;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+.phrase-compare-title strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.phrase-compare-title span {
+  color: var(--text-4);
+  font-size: 9.5px;
+}
+
+.phrase-compare-bars {
+  grid-area: bars;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.phrase-bar-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-4);
+  font-size: 8.5px;
+}
+
+.phrase-bar-line > span {
+  width: 9px;
+  flex: none;
+  font-weight: 700;
+}
+
+.phrase-bar-line i {
+  flex: 1;
+  height: 5px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.phrase-bar-line i b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #5aa9f5;
+  transition: width 0.3s ease;
+}
+
+.phrase-bar-line.b i b {
+  background: #8f7dff;
+}
+
+.phrase-bar-line em {
+  width: 36px;
+  flex: none;
+  color: var(--text-3);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.phrase-delta {
+  grid-area: delta;
+  align-self: start;
+  color: var(--text-3);
+  font-size: 10px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.phrase-delta.good {
+  color: var(--good);
+}
+
+.phrase-delta.warn {
+  color: var(--sharp);
+}
+
+.phrase-delta.flat {
+  color: var(--text-3);
+}
+
+.phrase-delta.none {
+  color: var(--text-4);
+}
+
+/* ---------------- 音准仪：练声小课入口 ---------------- */
+
+.coach-header-btn {
+  display: inline-flex;
+}
+
+.coach-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  margin-top: 24px;
+}
+
+.coach-strip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.coach-strip-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background:
+    linear-gradient(110deg, rgba(143, 125, 255, 0.08), transparent 62%),
+    var(--surface);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.coach-strip-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.coach-strip-copy strong {
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+.coach-strip-copy small {
+  color: var(--text-3);
+  font-size: 10px;
+}
+
+.coach-strip-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.coach-strip-action svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* ---------------- 练声小课 ---------------- */
+
+.coach-page {
+  gap: 13px;
+}
+
+.coach-progress-chip {
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  color: var(--text-3);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.coach-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px;
+  background:
+    radial-gradient(440px 220px at 100% 0%, rgba(143, 125, 255, 0.15), transparent 72%),
+    var(--surface);
+}
+
+.coach-intro .empty-icon {
+  flex: none;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.coach-intro h1 {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.coach-intro p:not(.eyebrow) {
+  margin-top: 6px;
+  color: var(--text-3);
+  font-size: 11.5px;
+  line-height: 1.65;
+}
+
+.coach-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.coach-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 16px;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    transform 0.14s ease;
+}
+
+.coach-card:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
+
+.coach-index {
+  align-self: flex-start;
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  opacity: 0.85;
+}
+
+.coach-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.coach-copy strong {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 680;
+}
+
+.coach-copy small {
+  color: var(--text-3);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.coach-card-meta {
+  margin-top: 2px;
+  color: var(--text-4);
+  font-size: 10px;
+}
+
+.coach-card-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.coach-card-action svg {
+  width: 17px;
+  height: 17px;
+}
+
+.coach-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 18px;
+}
+
+.coach-setup-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.coach-setup-head h1 {
+  color: var(--text);
+  font-size: 26px;
+  font-weight: 710;
+  line-height: 1.18;
+  letter-spacing: -0.025em;
+}
+
+.coach-setup-head p:not(.eyebrow) {
+  margin-top: 6px;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.coach-duration {
+  flex: none;
+  padding: 4px 9px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.coach-targets,
+.coach-root {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.coach-target-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.coach-target-chip {
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.coach-root-control {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.coach-root-control .icon-btn {
+  width: 38px;
+  height: 38px;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.coach-root-readout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 78px;
+  padding: 3px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.coach-root-readout strong {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.coach-root-readout span {
+  color: var(--text-4);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.coach-root-control .btn.small {
+  margin-left: auto;
+  min-height: 38px;
+}
+
+.coach-root-control .btn.small.active {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.coach-criteria {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 13px;
+  border: 1px solid rgba(143, 125, 255, 0.24);
+  border-radius: 13px;
+  background: rgba(143, 125, 255, 0.07);
+}
+
+.coach-criteria strong {
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.coach-criteria p {
+  color: var(--text-2);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.coach-criteria ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.coach-criteria li {
+  position: relative;
+  padding-left: 10px;
+  color: var(--text-3);
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+
+.coach-criteria li::before {
+  content: '·';
+  position: absolute;
+  left: 2px;
+  color: var(--accent-strong);
+}
+
+.coach-tips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.coach-tips span {
+  padding: 4px 9px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-3);
+  font-size: 10px;
+}
+
+.coach-start {
+  min-height: 52px;
+  font-size: 15px;
+}
+
+.coach-countdown {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 36px 22px;
+  text-align: center;
+  background:
+    radial-gradient(420px 260px at 50% 0%, rgba(143, 125, 255, 0.16), transparent 72%),
+    var(--surface);
+}
+
+.coach-countdown-number {
+  color: var(--accent-strong);
+  font-size: 96px;
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  text-shadow: 0 0 40px rgba(143, 125, 255, 0.45);
+  animation: coach-count 1s ease-out;
+}
+
+@keyframes coach-count {
+  from {
+    transform: scale(0.84);
+    opacity: 0.4;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.coach-countdown h1 {
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.coach-countdown p:not(.eyebrow) {
+  max-width: 26em;
+  color: var(--text-3);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.coach-countdown p strong {
+  color: var(--accent-strong);
+}
+
+.coach-live {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 17px 18px;
+  background:
+    radial-gradient(440px 230px at 18% 0%, var(--state-soft), transparent 72%),
+    var(--surface);
+}
+
+.coach-live.severity-good {
+  border-color: rgba(46, 196, 160, 0.28);
+}
+
+.coach-live.severity-sharp {
+  border-color: rgba(232, 163, 61, 0.3);
+}
+
+.coach-live.severity-flat {
+  border-color: rgba(90, 169, 245, 0.3);
+}
+
+.coach-live-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.coach-live-head h1 {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 660;
+}
+
+.coach-live-time {
+  color: var(--text-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.coach-live-main {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.coach-live-note {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.coach-live-note > span {
+  color: var(--state, var(--text));
+  font-size: clamp(58px, 17vw, 82px);
+  font-weight: 740;
+  line-height: 0.9;
+  letter-spacing: -0.04em;
+}
+
+.coach-live-note small {
+  color: var(--text-4);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.coach-live-cents {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  padding-bottom: 4px;
+  text-align: right;
+}
+
+.coach-live-cents strong {
+  color: var(--text-2);
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.coach-live-cents strong.good,
+.coach-live-cents span.good {
+  color: var(--good);
+}
+
+.coach-live-cents strong.sharp,
+.coach-live-cents span.sharp {
+  color: var(--sharp);
+}
+
+.coach-live-cents strong.flat,
+.coach-live-cents span.flat {
+  color: var(--flat);
+}
+
+.coach-live-cents span {
+  color: var(--text-3);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.coach-progress {
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.coach-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent-deep), var(--accent-strong));
+  transition: width 0.08s linear;
+}
+
+.coach-live-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-3);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.coach-roll-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 10px 6px;
+}
+
+.coach-roll-card .pitch-roll {
+  height: 230px;
+}
+
+.coach-live-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.coach-result-hero {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+  background:
+    radial-gradient(420px 240px at 0% 0%, rgba(143, 125, 255, 0.14), transparent 72%),
+    var(--surface);
+}
+
+.coach-result-copy {
+  min-width: 0;
+}
+
+.coach-result-copy h1 {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.coach-result-copy > p:not(.eyebrow) {
+  margin-top: 5px;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.coach-save-state {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  color: var(--good);
+  font-size: 10.5px;
+}
+
+.coach-save-state .spinner {
+  width: 12px;
+  height: 12px;
+  border-width: 2px;
+}
+
+.coach-save-state svg {
+  width: 14px;
+  height: 14px;
+}
+
+.coach-save-state .warn {
+  color: var(--sharp);
+}
+
+.coach-result-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.coach-note-results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.coach-note-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  gap: 6px;
+}
+
+.coach-note-grid li {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  text-align: center;
+}
+
+.coach-note-grid li strong {
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.coach-note-grid li span {
+  color: var(--text-2);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.coach-note-grid li small {
+  color: var(--text-4);
+  font-size: 8.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.coach-note-grid li.tone-good {
+  border-color: rgba(46, 196, 160, 0.22);
+  background: var(--good-soft);
+}
+
+.coach-note-grid li.tone-good span {
+  color: var(--good);
+}
+
+.coach-note-grid li.tone-warn {
+  border-color: rgba(232, 163, 61, 0.22);
+  background: var(--sharp-soft);
+}
+
+.coach-note-grid li.tone-warn span {
+  color: var(--sharp);
+}
+
+.coach-note-grid li.tone-low {
+  border-color: rgba(240, 122, 132, 0.2);
+  background: rgba(240, 122, 132, 0.08);
+}
+
+.coach-note-grid li.tone-low span {
+  color: #f08a94;
+}
+
+.coach-result-actions {
+  flex-wrap: wrap;
+}
+
+/* ---------------- 分享成绩卡 ---------------- */
+
+.share-layer {
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+}
+
+.share-card-dialog {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(440px, 100%);
+  max-height: calc(100svh - 28px);
+  padding: 17px;
+  overflow-y: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: 24px;
+  background:
+    radial-gradient(420px 240px at 100% 0%, rgba(143, 125, 255, 0.14), transparent 72%),
+    #0e1016;
+  box-shadow: 0 40px 100px -40px rgba(0, 0, 0, 0.95);
+  animation: share-in 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes share-in {
+  from {
+    transform: translateY(14px) scale(0.98);
+    opacity: 0.4;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.share-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.share-card-head h2 {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.share-card-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 260px;
+  max-height: 60svh;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: #090b10;
+}
+
+.share-card-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 60svh;
+  object-fit: contain;
+}
+
+.share-card-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  padding: 24px;
+  color: var(--text-3);
+  font-size: 11.5px;
+  text-align: center;
+}
+
+.share-card-loading strong {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.share-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.share-card-actions .btn {
+  flex: 1 1 auto;
+  min-width: 110px;
+  min-height: 42px;
+  font-size: 12.5px;
+}
+
+.share-card-message {
+  color: var(--good);
+  font-size: 11.5px;
+  text-align: center;
+}
+
+/* ---------------- 宽屏 ---------------- */
+
+@media (min-width: 720px) {
+  .progress-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .progress-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
+    gap: 11px;
+  }
+
+  .trend-block {
+    grid-column: 1 / -1;
+  }
+
+  .range-block {
+    grid-column: 1;
+  }
+
+  .issues-block {
+    grid-column: 2;
+  }
+
+  .song-group-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .song-group-card {
+    padding: 15px;
+  }
+
+  .phrase-compare-row {
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 0.8fr) auto;
+    grid-template-areas: 'title bars delta';
+    align-items: center;
+  }
+
+  .compare-roll {
+    height: 300px;
+  }
+
+  .coach-result-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .records-screen .page {
+    gap: 18px;
+  }
+
+  .progress-overview {
+    gap: 18px;
+    padding: 20px 22px;
+  }
+
+  .progress-overview-head h2 {
+    font-size: 26px;
+  }
+
+  .progress-stats strong {
+    font-size: 22px;
+  }
+
+  .progress-block {
+    padding: 15px;
+  }
+
+  .piano-keys {
+    height: 88px;
+  }
+
+  .song-progress-screen .page {
+    width: 100%;
+    max-width: 1120px;
+    margin: 0 auto;
+  }
+
+  .song-progress-hero {
+    padding: 20px 24px;
+  }
+
+  .song-progress-hero h1 {
+    font-size: 30px;
+  }
+
+  .song-score-card,
+  .song-compare-card,
+  .song-phrase-compare {
+    padding: 18px 20px;
+  }
+
+  .compare-roll {
+    height: 340px;
+  }
+
+  .compare-card {
+    padding: 12px;
+  }
+
+  .compare-pickers {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .compare-pickers select {
+    min-height: 44px;
+    font-size: 12px;
+  }
+
+  .coach-header-btn {
+    display: inline-flex;
+  }
+
+  .coach-strip {
+    display: none;
+  }
+
+  .coach-page {
+    width: 100%;
+    max-width: 980px;
+    margin: 0 auto;
+  }
+
+  .coach-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .coach-card {
+    flex-direction: column;
+    align-items: flex-start;
+    min-height: 190px;
+    padding: 18px;
+  }
+
+  .coach-index {
+    font-size: 12px;
+  }
+
+  .coach-copy {
+    flex: 1;
+  }
+
+  .coach-copy strong {
+    font-size: 17px;
+  }
+
+  .coach-card-action {
+    align-self: flex-end;
+    margin-top: auto;
+  }
+
+  .coach-list + .headphone-note {
+    margin-top: 6px;
+  }
+
+  .coach-setup {
+    padding: 24px;
+  }
+
+  .coach-roll-card .pitch-roll {
+    height: 300px;
+  }
+
+  .coach-note-grid {
+    grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  }
+
+  .coach-result-copy h1 {
+    font-size: 27px;
+  }
+
+  .share-layer {
+    padding: 40px;
+  }
+
+  .share-card-dialog {
+    width: min(480px, 100%);
+    padding: 20px;
+  }
+}
+
+.period-switch {
+  gap: 2px;
+  padding: 3px;
+}
+
+.period-switch button {
+  flex: none;
+  min-height: 33px;
+  padding: 3px 9px;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+@media (min-width: 720px) {
+  .trend-block .trend-chart {
+    width: 100%;
+    max-width: 700px;
+    margin: 0 auto;
+  }
+
+  .song-score-card .trend-chart {
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+  }
 }

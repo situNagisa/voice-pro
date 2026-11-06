@@ -198,3 +198,25 @@ export function RefreshIcon(props: IconProps) {
 export function CheckIcon(props: IconProps) {
   return base(props, <path d="m5 12.5 4.5 4.5L19 6.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />)
 }
+
+export function ShareIcon(props: IconProps) {
+  return base(
+    props,
+    <>
+      <circle cx="6" cy="12" r="2.3" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="18" cy="6" r="2.3" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="18" cy="18" r="2.3" stroke="currentColor" strokeWidth="1.8" />
+      <path d="m8.1 10.9 7.8-3.7M8.1 13.1l7.8 3.7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </>,
+  )
+}
+
+export function DownloadIcon(props: IconProps) {
+  return base(
+    props,
+    <>
+      <path d="M12 4v10.5m0 0 4.2-4.2M12 14.5l-4.2-4.2" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4.8 15.2V18A1.8 1.8 0 0 0 6.6 19.8h10.8a1.8 1.8 0 0 0 1.8-1.8v-2.8" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+    </>,
+  )
+}

@@ -6,6 +6,7 @@ import {
   acknowledgeLibraryJob,
   cancelLibraryImport,
   deleteLibrarySong,
+  discardLibraryJob,
   findLibrarySong,
   formatBytes,
   getLibraryJobSnapshot,
@@ -13,6 +14,7 @@ import {
   listLibrarySongs,
   loadLibrarySong,
   renameLibrarySong,
+  resumeLibraryImport,
   startLibraryImport,
   subscribeLibraryJob,
 } from '../library'
@@ -88,6 +90,7 @@ export function SongsHome({
     getLibraryJobSnapshot,
   )
   const jobRunning = job?.status === 'running'
+  const jobPending = job?.status === 'pending'
 
   const refreshLibrary = useCallback(async (): Promise<void> => {
     const songs = await listLibrarySongs()
@@ -167,6 +170,10 @@ export function SongsHome({
     if (!file) return
     if (jobRunning) {
       setError('已有歌曲正在分析，请等它完成后再导入。')
+      return
+    }
+    if (jobPending) {
+      setError('上次的分析还没处理完，请先在上面选择继续或放弃。')
       return
     }
     if (checking || openingId || demoBusy) return
@@ -317,7 +324,8 @@ export function SongsHome({
 
   const showJobDone = job != null && job.status === 'done' && !job.acknowledged
   const showJobError = job != null && job.status === 'error' && !job.acknowledged
-  const importBusy = checking || jobRunning || openingId != null || demoBusy != null
+  const importBusy =
+    checking || jobRunning || jobPending || openingId != null || demoBusy != null
 
   return (
     <div className="screen home-screen">
@@ -401,6 +409,44 @@ export function SongsHome({
             </div>
           </div>
 
+          {jobPending && job && (
+            <Notice tone="warn">
+              <div className="notice-line">
+                <span>
+                  上次《{job.songName}》还没分析完，原文件已保存在本机。继续后会重新跑未完成的步骤。
+                </span>
+              </div>
+              <div className="notice-actions">
+                <button
+                  type="button"
+                  className="text-btn"
+                  onClick={() => {
+                    if (!resumeLibraryImport()) setError('继续分析失败，请重试。')
+                  }}
+                >
+                  继续分析
+                </button>
+                <button
+                  type="button"
+                  className="text-btn muted"
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        '放弃上次未完成的分析？保存的原文件会从本机删除。',
+                      )
+                    ) {
+                      return
+                    }
+                    discardLibraryJob()
+                    setError(null)
+                  }}
+                >
+                  放弃
+                </button>
+              </div>
+            </Notice>
+          )}
+
           {jobRunning && job && (
             <>
               <ProgressBar
@@ -447,6 +493,17 @@ export function SongsHome({
                 <span>《{job.songName}》分析失败：{job.error ?? '请重试。'}</span>
               </div>
               <div className="notice-actions">
+                {job.resumable && (
+                  <button
+                    type="button"
+                    className="text-btn"
+                    onClick={() => {
+                      if (!resumeLibraryImport()) setError('重试失败，请重新导入文件。')
+                    }}
+                  >
+                    重试分析
+                  </button>
+                )}
                 <button
                   type="button"
                   className="text-btn"
@@ -616,7 +673,9 @@ export function SongsHome({
                       ? '正在打开歌曲…'
                       : demoBusy
                         ? '正在打开示例歌…'
-                        : '导入音频文件'}
+                        : jobPending
+                          ? '先处理上次未完成的分析'
+                          : '导入音频文件'}
               </strong>
               <small>
                 mp3 · m4a · wav · flac · ogg，桌面也可拖进来；分析结果会保存在本机

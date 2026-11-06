@@ -1,4 +1,5 @@
 import type { RawUserPoint } from '../audio/analysis'
+import { pointTranspose } from '../audio/analysis'
 import type { AudioSegment } from '../audio/recorder'
 import type { LoopRange } from '../audio/player'
 import type { Note } from '../core/types'
@@ -10,7 +11,7 @@ import {
   transactionDone,
 } from './db'
 
-export type SongKind = 'demo' | 'imported'
+export type SongKind = 'demo' | 'imported' | 'exercise'
 
 /** 列表页只读这份轻量元信息，避免把录音和上万条轨迹一次读出来。 */
 export interface PracticeRecordMeta {
@@ -20,6 +21,8 @@ export interface PracticeRecordMeta {
   songName: string
   songKind: SongKind
   duration: number
+  /** 实际唱/练过的秒数（按录音分段累计）；老记录没有这个字段时退回 duration。 */
+  practicedSeconds?: number
   score: number | null
   hitRate: number | null
   tolerance: number
@@ -28,6 +31,9 @@ export interface PracticeRecordMeta {
   voiceLowMidi?: number
   voiceMedianMidi?: number
   voiceHighMidi?: number
+  /** 实际唱到的最低/最高音（不是分位数），用于“我的音域”。 */
+  voiceMinMidi?: number
+  voiceMaxMidi?: number
 }
 
 /** 把多条练习记录的音高分布汇总成一个舒适音域。 */
@@ -81,11 +87,16 @@ function summarizeVoice(
   transpose: number,
 ): Pick<
   PracticeRecordMeta,
-  'voiceSamples' | 'voiceLowMidi' | 'voiceMedianMidi' | 'voiceHighMidi'
+  | 'voiceSamples'
+  | 'voiceLowMidi'
+  | 'voiceMedianMidi'
+  | 'voiceHighMidi'
+  | 'voiceMinMidi'
+  | 'voiceMaxMidi'
 > {
   const values = points
     .filter((point) => point.clarity >= 0.8 && Number.isFinite(point.midi))
-    .map((point) => point.midi - transpose)
+    .map((point) => point.midi - pointTranspose(point, transpose))
     .sort((a, b) => a - b)
   if (values.length < 10) return {}
   return {
@@ -93,6 +104,8 @@ function summarizeVoice(
     voiceLowMidi: quantileSorted(values, 0.1),
     voiceMedianMidi: quantileSorted(values, 0.5),
     voiceHighMidi: quantileSorted(values, 0.9),
+    voiceMinMidi: values[0],
+    voiceMaxMidi: values[values.length - 1],
   }
 }
 
@@ -168,6 +181,11 @@ export async function loadVoiceStats(): Promise<VoiceRangeSummary | null> {
 export async function saveRecord(record: PracticeRecord): Promise<void> {
   const db = await openAppDb()
   const summary = summarizeVoice(record.points, record.transpose)
+  const recordedSeconds = record.segments.reduce(
+    (total, segment) => total + (Number.isFinite(segment.duration) ? Math.max(0, segment.duration) : 0),
+    0,
+  )
+  const practicedSeconds = recordedSeconds > 0 ? Math.min(record.duration || recordedSeconds, recordedSeconds) : undefined
   const meta: PracticeRecordMeta = {
     id: record.id,
     createdAt: record.createdAt,
@@ -175,6 +193,7 @@ export async function saveRecord(record: PracticeRecord): Promise<void> {
     songName: record.songName,
     songKind: record.songKind,
     duration: record.duration,
+    practicedSeconds,
     score: record.score,
     hitRate: record.hitRate,
     tolerance: record.tolerance,

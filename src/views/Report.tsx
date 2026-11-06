@@ -7,7 +7,8 @@ import { readingAt, recordMelody } from '../audio/review'
 import type { PracticeRecord } from '../state/records'
 import type { PracticeLoopTarget } from '../state/session'
 import { TopBar } from '../ui/controls'
-import { ChevronRightIcon, PlayIcon, RefreshIcon } from '../ui/icons'
+import { ChevronRightIcon, PlayIcon, RefreshIcon, ShareIcon } from '../ui/icons'
+import { ShareCardDialog } from '../ui/ShareCardDialog'
 import { PitchRoll } from '../ui/PitchRoll'
 import { useIsDesktop } from '../ui/useMediaQuery'
 
@@ -80,6 +81,7 @@ export function ReportView({
   const pointsRef = useRef(sortedPoints)
   const [activePhraseIndex, setActivePhraseIndex] = useState<number | null>(null)
   const [previewCursor, setPreviewCursor] = useState<number | null>(null)
+  const [shareOpen, setShareOpen] = useState(false)
   const activeIndex = activePhraseIndex ?? focusIndex ?? report.phrases[0]?.index ?? null
   const activePhrase = report.phrases.find((phrase) => phrase.index === activeIndex) ?? null
   const previewCenterRef = useRef(
@@ -413,6 +415,10 @@ export function ReportView({
             <PlayIcon />
             查看完整回看
           </button>
+          <button type="button" className="btn secondary" onClick={() => setShareOpen(true)}>
+            <ShareIcon />
+            分享成绩卡
+          </button>
           <button type="button" className="btn secondary" onClick={onRestart}>
             <RefreshIcon />
             再练一次
@@ -422,6 +428,14 @@ export function ReportView({
           </button>
         </div>
       </main>
+
+      <ShareCardDialog
+        open={shareOpen}
+        record={record}
+        report={report}
+        grade={grade.title}
+        onClose={() => setShareOpen(false)}
+      />
     </div>
   )
 }

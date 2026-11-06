@@ -22,7 +22,10 @@ export { hashFile } from './hash'
 export {
   acknowledgeLibraryJob,
   cancelLibraryImport,
+  discardLibraryJob,
   getLibraryJobSnapshot,
+  restoreLibraryJob,
+  resumeLibraryImport,
   startLibraryImport,
   subscribeLibraryJob,
 } from './jobs'

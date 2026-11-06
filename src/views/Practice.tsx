@@ -104,6 +104,7 @@ export function PracticeView({
   )
   const [sessionTranspose, setSessionTranspose] = useState(settings.transpose)
   const [trackBusy, setTrackBusy] = useState<SongTrack | null>(null)
+  const [transposeBusy, setTransposeBusy] = useState(false)
   const [replayBusy, setReplayBusy] = useState(false)
 
   const playerRef = useRef<SongPlayer | null>(null)
@@ -199,17 +200,41 @@ export function PracticeView({
     return song.buffer
   }
 
-  async function ensureTransposedTrack(
+  /** 离线回退：把当前音轨处理成目标调后换进播放器；transpose=0 时换回原轨。 */
+  async function applyTransposedTrack(
     player: SongPlayer,
     track: SongTrack,
     transpose: number,
   ): Promise<void> {
-    if (transpose === 0) return
     const source = trackBuffer(track)
     if (!source) return
-    const processed = await processBuffer(source, { semitones: transpose })
+    const processed =
+      transpose === 0 ? source : await processBuffer(source, { semitones: transpose })
     if (!mountedRef.current || finishingRef.current) return
     player.setTrack(track, processed)
+  }
+
+  async function changeSessionTranspose(next: number): Promise<void> {
+    const value = Math.max(-6, Math.min(6, Math.round(next)))
+    if (value === sessionTransposeRef.current || transposeBusy) return
+    sessionTransposeRef.current = value
+    setSessionTranspose(value)
+    onPatchSettings({ transpose: value })
+    const player = playerRef.current
+    if (!player) return
+    if (player.usesRealtime) {
+      player.setTranspose(value)
+      return
+    }
+    setTransposeBusy(true)
+    try {
+      await applyTransposedTrack(player, playbackModeRef.current, value)
+    } catch (err) {
+      console.warn('[voice-pro] 音轨变调失败', err)
+      if (mountedRef.current) setError('这条音轨变调失败，请重试或换回原调。')
+    } finally {
+      if (mountedRef.current) setTransposeBusy(false)
+    }
   }
 
   async function startSession(): Promise<void> {
@@ -236,15 +261,21 @@ export function PracticeView({
       player.setMode(availableMode)
       playerRef.current = player
       player.setVolume(settingsRef.current.volume)
+      player.setTranspose(transpose)
       await player.resume()
       if (!mountedRef.current) {
         player.dispose()
         return
       }
 
-      if (transpose !== 0) {
+      const realtime = await player.enableRealtime()
+      if (!mountedRef.current) {
+        player.dispose()
+        return
+      }
+      if (!realtime && transpose !== 0) {
         setStatusText('正在准备变调伴奏…')
-        await ensureTransposedTrack(player, availableMode, transpose)
+        await applyTransposedTrack(player, availableMode, transpose)
         if (!mountedRef.current) {
           player.dispose()
           return
@@ -271,7 +302,13 @@ export function PracticeView({
           const latency = latencyRef.current
           const t = activePlayer.positionAt(frame.t) - latency / 1000
           if (!Number.isFinite(t) || t < 0) return
-          pointsRef.current.push({ t, f0: frame.f0, midi: frame.midi, clarity: frame.clarity })
+          pointsRef.current.push({
+            t,
+            f0: frame.f0,
+            midi: frame.midi,
+            clarity: frame.clarity,
+            shift: sessionTransposeRef.current,
+          })
           if (performance.now() - lastUiRef.current >= 40) {
             lastUiRef.current = performance.now()
             const target = referenceMidiAt(song.melody, t, sessionTransposeRef.current)
@@ -333,7 +370,14 @@ export function PracticeView({
       }
 
       const startAt = loop ? loop.start : 0
-      segmentsRef.current = [{ songStart: startAt, voiceStart: 0, duration: 0 }]
+      // 录音先开始、伴奏在 Worklet 预填后才出声，分段要留出这段算法延迟
+      segmentsRef.current = [
+        {
+          songStart: startAt,
+          voiceStart: (recorder?.elapsed ?? 0) + player.processingLatency,
+          duration: 0,
+        },
+      ]
       pointsRef.current = []
       currentRef.current = null
       pausedAtRef.current = null
@@ -376,14 +420,19 @@ export function PracticeView({
     if (trackBusyRef.current != null) return
     const player = playerRef.current
     const transpose = sessionTransposeRef.current
-    if (player && transpose !== 0 && mode !== playbackModeRef.current) {
+    if (
+      player &&
+      transpose !== 0 &&
+      mode !== playbackModeRef.current &&
+      !player.usesRealtime
+    ) {
       const source = trackBuffer(mode)
       if (!source) return
       setTrackBusy(mode)
       trackBusyRef.current = mode
       setStatusText('正在准备变调音轨…')
       try {
-        await ensureTransposedTrack(player, mode, transpose)
+        await applyTransposedTrack(player, mode, transpose)
       } catch (err) {
         console.warn('[voice-pro] 音轨变调失败', err)
         setError('这条音轨变调失败，请重试或换回原调。')
@@ -456,7 +505,11 @@ export function PracticeView({
     const last = segmentsRef.current[segmentsRef.current.length - 1]
     segmentsRef.current = [
       ...segmentsRef.current.filter((segment) => segment !== last || segment.duration > 0),
-      { songStart: from, voiceStart: recorder.elapsed, duration: 0 },
+      {
+        songStart: from,
+        voiceStart: recorder.elapsed + player.processingLatency,
+        duration: 0,
+      },
     ]
     cursorRef.current = null
     setCursor(null)
@@ -505,46 +558,26 @@ export function PracticeView({
       if (mountedRef.current) setReplayPlaying(false)
     }
 
-    let original = song.buffer
-    let accompaniment = song.accompaniment ?? null
-    let vocals = song.vocals ?? null
-    const transpose = sessionTransposeRef.current
-    if (transpose !== 0) {
-      setReplayBusy(true)
-      try {
-        if (replayMode === 'original') {
-          original = await processBuffer(original, { semitones: transpose })
-        } else if (replayMode === 'accompaniment' && accompaniment) {
-          accompaniment = await processBuffer(accompaniment, { semitones: transpose })
-        } else if (replayMode === 'vocals' && vocals) {
-          vocals = await processBuffer(vocals, { semitones: transpose })
-        } else if (replayMode === 'mix') {
-          if (accompaniment) {
-            accompaniment = await processBuffer(accompaniment, { semitones: transpose })
-          } else {
-            original = await processBuffer(original, { semitones: transpose })
-          }
-        }
-      } catch (err) {
-        console.warn('[voice-pro] 回放变调失败', err)
-        if (mountedRef.current) setError('回放变调失败，暂时按原调播放。')
-      } finally {
-        if (mountedRef.current) setReplayBusy(false)
-      }
-      if (!mountedRef.current || finishingRef.current) return
+    setReplayBusy(true)
+    try {
+      await clip.play({
+        original: song.buffer,
+        accompaniment: song.accompaniment ?? null,
+        vocals: song.vocals ?? null,
+        voice: voiceBufferRef.current,
+        songTime: from,
+        voiceOffset: voiceOffsetAt(segmentsRef.current, from),
+        mode: replayMode,
+        volume: replayMode === 'original' ? settingsRef.current.volume : 0.92,
+        semitones: sessionTransposeRef.current,
+      })
+      if (mountedRef.current) setReplayPlaying(clip.playing)
+    } catch (err) {
+      console.warn('[voice-pro] 回放失败', err)
+      if (mountedRef.current) setError('回放失败，请重试。')
+    } finally {
+      if (mountedRef.current) setReplayBusy(false)
     }
-
-    await clip.play({
-      original,
-      accompaniment,
-      vocals,
-      voice: voiceBufferRef.current,
-      songTime: from,
-      voiceOffset: voiceOffsetAt(segmentsRef.current, from),
-      mode: replayMode,
-      volume: replayMode === 'original' ? settingsRef.current.volume : 0.92,
-    })
-    if (mountedRef.current) setReplayPlaying(clip.playing)
   }
 
   function pickTime(time: number): void {
@@ -782,11 +815,7 @@ export function PracticeView({
         <main className="page practice-ending">
           <div className="spinner large" />
           <h2>{statusText}</h2>
-          <p className="muted">
-            {sessionTranspose !== 0
-              ? '伴奏变调需要先在本机处理一遍，通常几秒到十几秒。'
-              : '正在准备麦克风与伴奏…'}
-          </p>
+          <p className="muted">正在准备麦克风与伴奏…</p>
         </main>
       ) : phase === 'ending' ? (
         <main className="page practice-ending">
@@ -819,8 +848,34 @@ export function PracticeView({
                     )
                   })}
                 </div>
+                <div className="practice-key" role="group" aria-label="实时移调">
+                  <span className="field-label">移调</span>
+                  <div className="stepper">
+                    <button
+                      type="button"
+                      aria-label="降一个半音"
+                      disabled={sessionTranspose <= -6 || transposeBusy}
+                      onClick={() => void changeSessionTranspose(sessionTranspose - 1)}
+                    >
+                      −
+                    </button>
+                    <output>
+                      {transposeBusy ? '…' : `${sessionTranspose > 0 ? '+' : ''}${sessionTranspose}`}
+                    </output>
+                    <button
+                      type="button"
+                      aria-label="升一个半音"
+                      disabled={sessionTranspose >= 6 || transposeBusy}
+                      onClick={() => void changeSessionTranspose(sessionTranspose + 1)}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
                 {trackBusy != null ? (
                   <span className="roll-track-note">正在准备变调音轨…</span>
+                ) : transposeBusy ? (
+                  <span className="roll-track-note">正在准备新调…</span>
                 ) : !hasAccompaniment ? (
                   <span className="roll-track-note">这首歌没有人声分离结果</span>
                 ) : null}

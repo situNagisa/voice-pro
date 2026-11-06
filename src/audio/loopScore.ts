@@ -1,6 +1,6 @@
 import type { ReferenceMelody } from '../core/types'
 import type { RawUserPoint } from './analysis'
-import { compareToTarget, referenceMidiAt } from './analysis'
+import { compareToTarget, pointTranspose, referenceMidiAt } from './analysis'
 
 export interface PassResult {
   pass: number
@@ -17,6 +17,7 @@ export function evalPass(options: {
   scoreEnd: number
   octaveAlign: boolean
   tolerance: number
+  transpose: number
   pass: number
 }): PassResult {
   let samples = 0
@@ -24,7 +25,11 @@ export function evalPass(options: {
   let sum = 0
   for (const point of options.points) {
     if (point.t < options.scoreStart - 0.03 || point.t > options.scoreEnd + 0.03) continue
-    const target = referenceMidiAt(options.melody, point.t)
+    const target = referenceMidiAt(
+      options.melody,
+      point.t,
+      pointTranspose(point, options.transpose),
+    )
     if (target == null) continue
     const comparison = compareToTarget(
       point.midi,

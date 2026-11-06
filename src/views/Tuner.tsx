@@ -7,17 +7,28 @@ import {
   midiToNoteName,
 } from '../audio/pitch'
 import { PitchCapture } from '../audio/capture'
+import { COACH_EXERCISES } from '../audio/coach'
+import type { CoachExerciseId } from '../audio/coach'
 import { mediaErrorMessage } from '../audio/capture'
 import { ClipPlayer } from '../audio/clipPlayer'
 import type { RawUserPoint } from '../audio/analysis'
 import type { AudioSegment } from '../audio/recorder'
 import { VoiceRecorder } from '../audio/recorder'
 import { nearestPoint, voiceOffsetAt } from '../audio/review'
-import { SettingsIcon, MicIcon, PauseIcon, PlayIcon, RefreshIcon, StopIcon } from '../ui/icons'
+import {
+  ChevronRightIcon,
+  SettingsIcon,
+  MicIcon,
+  PauseIcon,
+  PlayIcon,
+  RefreshIcon,
+  StopIcon,
+} from '../ui/icons'
 import { PitchRoll } from '../ui/PitchRoll'
 
 interface TunerViewProps {
   onOpenSettings: () => void
+  onStartCoach: (exerciseId?: CoachExerciseId) => void
 }
 
 type Phase = 'starting' | 'listening' | 'paused' | 'error'
@@ -34,7 +45,7 @@ function noteCents(midi: number): number {
   return centsFromNearestNote(midi)
 }
 
-export function TunerView({ onOpenSettings }: TunerViewProps) {
+export function TunerView({ onOpenSettings, onStartCoach }: TunerViewProps) {
   const [phase, setPhase] = useState<Phase>('starting')
   const [error, setError] = useState<string | null>(null)
   const [current, setCurrent] = useState<TunerReading | null>(null)
@@ -401,6 +412,13 @@ export function TunerView({ onOpenSettings }: TunerViewProps) {
         </div>
         <div className="tab-header-tools">
           <span className="key-hints desktop-only">空格 暂停/继续 · 悬停查看音名</span>
+          <button
+            type="button"
+            className="btn small secondary coach-header-btn"
+            onClick={() => onStartCoach()}
+          >
+            练声小课
+          </button>
           <button type="button" className="icon-btn" aria-label="打开设置" onClick={onOpenSettings}>
             <SettingsIcon />
           </button>
@@ -653,6 +671,32 @@ export function TunerView({ onOpenSettings }: TunerViewProps) {
           </>
         )}
       </main>
+
+      <section className="coach-strip" aria-label="练声小课">
+        <div className="section-head">
+          <div>
+            <h2>练声小课</h2>
+            <p>三个短练习，先把音唱稳；完成会记入记录</p>
+          </div>
+          <span className="count-badge">3 个</span>
+        </div>
+        <div className="coach-strip-list">
+          {COACH_EXERCISES.map((exercise) => (
+            <button
+              key={exercise.id}
+              type="button"
+              className="coach-strip-card"
+              onClick={() => onStartCoach(exercise.id)}
+            >
+              <span className="coach-strip-copy">
+                <strong>{exercise.title}</strong>
+                <small>{exercise.subtitle} · {Math.round(exercise.duration)} 秒</small>
+              </span>
+              <span className="coach-strip-action"><ChevronRightIcon /></span>
+            </button>
+          ))}
+        </div>
+      </section>
     </div>
   )
 }

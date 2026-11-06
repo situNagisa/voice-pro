@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { InputSource } from './audio/capture'
+import type { CoachExerciseId } from './audio/coach'
 import type { PracticeRecord, PracticeRecordMeta } from './state/records'
 import {
   clearRecords,
@@ -12,6 +13,7 @@ import { DEFAULT_SETTINGS, loadSettings, saveSettings } from './state/settings'
 import type { Settings } from './state/settings'
 import { loadPrivacyChoice, savePrivacyChoice } from './state/privacy'
 import type { PrivacyChoice } from './state/privacy'
+import { restoreLibraryJob } from './library'
 import { BottomNav } from './ui/BottomNav'
 import type { TabKey } from './ui/BottomNav'
 import { PrivacyDialog } from './ui/PrivacyDialog'
@@ -24,8 +26,10 @@ import type { PracticeResult } from './views/Practice'
 import { RecordsView } from './views/Records'
 import { ReportView } from './views/Report'
 import { ReviewView } from './views/Review'
+import { SongProgressView } from './views/SongProgress'
 import { SongsHome } from './views/SongsHome'
 import { TunerView } from './views/Tuner'
+import { VocalCoachView } from './views/VocalCoach'
 import './App.css'
 
 type Overlay =
@@ -46,6 +50,8 @@ type Overlay =
       label: string
       returnTo: Overlay | null
     }
+  | { kind: 'song-progress'; songId: string; songName: string }
+  | { kind: 'coach'; exerciseId: CoachExerciseId | null }
 
 function App() {
   const [tab, setTab] = useState<TabKey>('songs')
@@ -80,6 +86,11 @@ function App() {
   useEffect(() => {
     // 首次进入时读取本机记录；之后的增删会主动刷新
     void refreshRecords()
+  }, [])
+
+  useEffect(() => {
+    // 把上次没分析完的任务恢复成“待继续”，首页会给出提示
+    void restoreLibraryJob()
   }, [])
 
   function patchSettings(patch: Partial<Settings>): void {
@@ -148,7 +159,7 @@ function App() {
     })
   }
 
-  async function openRecord(id: string): Promise<void> {
+  async function openRecord(id: string, returnTo: Overlay | null = null): Promise<void> {
     setOpeningRecord(true)
     try {
       const record = await loadRecord(id)
@@ -166,7 +177,7 @@ function App() {
         record,
         song: null,
         startAt: startPoint?.t ?? targetStart,
-        returnTo: null,
+        returnTo,
       })
     } catch (error) {
       console.warn('[voice-pro] 打开记录失败', error)
@@ -196,6 +207,18 @@ function App() {
   function backToTabs(): void {
     setOverlay(null)
     void refreshRecords()
+  }
+
+  function openSongProgress(songId: string, songName: string): void {
+    setOverlay({ kind: 'song-progress', songId, songName })
+  }
+
+  function openCoach(exerciseId?: CoachExerciseId): void {
+    if (!recordingAllowed) {
+      setPrivacyOpen(true)
+      return
+    }
+    setOverlay({ kind: 'coach', exerciseId: exerciseId ?? null })
   }
 
   function navigate(tabKey: TabKey): void {
@@ -293,6 +316,40 @@ function App() {
         }
       />
     )
+  } else if (overlay?.kind === 'song-progress') {
+    const songRecords = records.filter(
+      (record) => record.songId === overlay.songId && record.songKind !== 'exercise',
+    )
+    content = (
+      <SongProgressView
+        records={songRecords}
+        songName={overlay.songName}
+        onBack={() => setOverlay(null)}
+        onOpenRecord={(id) =>
+          void openRecord(id, {
+            kind: 'song-progress',
+            songId: overlay.songId,
+            songName: overlay.songName,
+          })
+        }
+      />
+    )
+  } else if (overlay?.kind === 'coach') {
+    content = (
+      <VocalCoachView
+        initialExercise={overlay.exerciseId}
+        onBack={() => {
+          setOverlay(null)
+          setTab('tuner')
+        }}
+        onSaved={() => void refreshRecords()}
+        onOpenRecords={() => {
+          setOverlay(null)
+          setTab('records')
+          void refreshRecords()
+        }}
+      />
+    )
   } else if (overlay?.kind === 'loop') {
     content = (
       <LoopPracticeView
@@ -321,7 +378,10 @@ function App() {
         )}
         {tab === 'tuner' &&
           (recordingAllowed ? (
-            <TunerView onOpenSettings={() => setSettingsOpen(true)} />
+            <TunerView
+              onOpenSettings={() => setSettingsOpen(true)}
+              onStartCoach={openCoach}
+            />
           ) : (
             <div className="screen tuner-screen">
               <header className="tab-header">
@@ -351,6 +411,7 @@ function App() {
             loading={recordsLoading}
             onOpen={(id) => void openRecord(id)}
             onDelete={(id) => void removeRecord(id)}
+            onOpenSong={openSongProgress}
             onGoSongs={() => setTab('songs')}
             onOpenSettings={() => setSettingsOpen(true)}
           />

@@ -54,20 +54,19 @@ function newRangeMelody(
   target: LoopRange,
   leadStart: number,
   padBefore: number,
-  speed: number,
-  transpose: number,
+  timeScale: number,
   duration: number,
 ): ReferenceMelody {
   const localNotes: Note[] = []
   for (const note of notes) {
     if (note.end < target.start - 0.05 || note.start > target.end + 0.05) continue
-    const start = (padBefore + note.start - leadStart) / speed
-    const end = (padBefore + note.end - leadStart) / speed
+    const start = (padBefore + note.start - leadStart) / timeScale
+    const end = (padBefore + note.end - leadStart) / timeScale
     if (end <= 0 || start >= duration) continue
     localNotes.push({
       start: Math.max(0, start),
       end: Math.min(duration, end),
-      midi: note.midi + transpose,
+      midi: note.midi,
     })
   }
   return { duration, hop: 0.01, frames: [], notes: localNotes }
@@ -255,7 +254,16 @@ export function LoopPracticeView({
     transposeRef.current = settings.transpose
     setTranspose(settings.transpose)
     if (phase === 'active' || phase === 'paused' || phase === 'preparing') {
-      void loadRange(speedRef.current, settings.transpose, targetIndexRef.current)
+      const player = playerRef.current
+      if (player?.usesRealtime) {
+        player.setTranspose(settings.transpose)
+      } else {
+        void loadRange(
+          targetIndexRef.current,
+          speedRef.current,
+          settings.transpose,
+        )
+      }
     }
     // 设置面板里改了移调时同步重建
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -304,6 +312,7 @@ export function LoopPracticeView({
     index: number,
     nextSpeed: number,
     nextTranspose: number,
+    realtime: boolean,
   ): Promise<RangePrepared> {
     const target = targets[index]
     if (!target) throw new Error('没有可练习的句子。')
@@ -312,12 +321,43 @@ export function LoopPracticeView({
     const leadStart = Math.max(0, target.start - beat)
     const padBefore = Math.max(0, beat - (target.start - leadStart))
     const loopEnd = Math.min(source.duration, target.end + 0.2)
-    const key = `${index}:${nextSpeed}:${nextTranspose}:${leadStart.toFixed(3)}:${loopEnd.toFixed(3)}`
+    // 实时模式下速度和调性不写进缓冲区，同一句可以反复切换参数
+    const key = realtime
+      ? `rt:${index}:${leadStart.toFixed(3)}:${loopEnd.toFixed(3)}`
+      : `${index}:${nextSpeed}:${nextTranspose}:${leadStart.toFixed(3)}:${loopEnd.toFixed(3)}`
     const cached = rangeCacheRef.current.get(key)
     if (cached) return cached
 
     const task = (async () => {
       const slice = sliceBuffer(source, leadStart, loopEnd, padBefore)
+      if (realtime) {
+        const localDuration = slice.duration
+        const localScoreStart = Math.min(
+          localDuration - 0.02,
+          padBefore + target.start - leadStart,
+        )
+        const localScoreEnd = Math.min(
+          localDuration,
+          padBefore + target.end - leadStart,
+        )
+        const melody = newRangeMelody(
+          song.melody.notes,
+          target,
+          leadStart,
+          padBefore,
+          1,
+          localDuration,
+        )
+        const scoreStart = Math.max(0, Math.min(localScoreStart, localDuration - 0.05))
+        return {
+          buffer: slice,
+          melody,
+          scoreStart,
+          scoreEnd: Math.min(localDuration, Math.max(scoreStart + 0.05, localScoreEnd)),
+          duration: localDuration,
+          beat,
+        }
+      }
       const processed = await processBuffer(slice, {
         semitones: nextTranspose,
         speed: nextSpeed,
@@ -337,7 +377,6 @@ export function LoopPracticeView({
         leadStart,
         padBefore,
         nextSpeed,
-        nextTranspose,
         localDuration,
       )
       const scoreStart = Math.max(0, Math.min(localScoreStart, localDuration - 0.05))
@@ -379,6 +418,11 @@ export function LoopPracticeView({
         player.dispose()
         return
       }
+      await player.enableRealtime()
+      if (!mountedRef.current) {
+        player.dispose()
+        return
+      }
 
       setStatusText('正在校准输入…')
       capture = new PitchCapture(player.ctx)
@@ -398,17 +442,24 @@ export function LoopPracticeView({
             return
           }
           const t = active.positionAt(frame.t)
-          const localT = ((t - latencyRef.current / 1000) % activeRange.duration + activeRange.duration) % activeRange.duration
+          // 设备延迟按当前速度换算到这一句的时间轴
+          const latency = (latencyRef.current / 1000) * speedRef.current
+          const localT = ((t - latency) % activeRange.duration + activeRange.duration) % activeRange.duration
           if (!Number.isFinite(localT)) return
           pointsRef.current.push({
             t: localT,
             f0: frame.f0,
             midi: frame.midi,
             clarity: frame.clarity,
+            shift: transposeRef.current,
           })
           if (performance.now() - lastUiRef.current >= 40) {
             lastUiRef.current = performance.now()
-            const target = referenceMidiAt(activeRange.melody, localT)
+            const target = referenceMidiAt(
+              activeRange.melody,
+              localT,
+              transposeRef.current,
+            )
             const comparison =
               target == null
                 ? null
@@ -469,18 +520,22 @@ export function LoopPracticeView({
   ): Promise<boolean> {
     const player = playerRef.current
     if (!player) return false
+    const realtime = player.usesRealtime
     const token = ++rebuildTokenRef.current
     const target = targets[index]
     if (!target) return false
-    if (!initial) {
+    if (!initial && !realtime) {
       setPhase('preparing')
+      setStatusText(`正在准备第 ${index + 1} 句…`)
+      setError(null)
+    } else if (!initial) {
       setStatusText(`正在准备第 ${index + 1} 句…`)
       setError(null)
     }
     acceptingRef.current = false
     player.pause()
     try {
-      const prepared = await prepareRange(index, nextSpeed, nextTranspose)
+      const prepared = await prepareRange(index, nextSpeed, nextTranspose, realtime)
       if (!mountedRef.current || token !== rebuildTokenRef.current) return false
       rangeRef.current = prepared
       setRange(prepared)
@@ -493,6 +548,8 @@ export function LoopPracticeView({
       setNow(0)
       lastPositionRef.current = 0
       player.setBuffer(prepared.buffer)
+      player.setSpeed(realtime ? speedRef.current : 1)
+      player.setTranspose(realtime ? transposeRef.current : 0)
       player.play(0)
       acceptingRef.current = true
       setPhase('active')
@@ -520,6 +577,7 @@ export function LoopPracticeView({
       scoreEnd: activeRange.scoreEnd,
       octaveAlign: settingsRef.current.octaveAlign,
       tolerance: settingsRef.current.tolerance,
+      transpose: transposeRef.current,
       pass: passRef.current,
     })
     passRef.current += 1
@@ -534,6 +592,12 @@ export function LoopPracticeView({
     if (next === speedRef.current) return
     setSpeed(next)
     speedRef.current = next
+    const player = playerRef.current
+    if (player?.usesRealtime) {
+      // 实时模式只改播放速率，参考旋律和已唱点仍在同一条时间轴上
+      player.setSpeed(next)
+      return
+    }
     await loadRange(targetIndexRef.current, next, transposeRef.current)
   }
 
@@ -542,6 +606,11 @@ export function LoopPracticeView({
     setTranspose(next)
     transposeRef.current = next
     onPatchSettings({ transpose: next })
+    const player = playerRef.current
+    if (player?.usesRealtime) {
+      player.setTranspose(next)
+      return
+    }
     await loadRange(targetIndexRef.current, speedRef.current, next)
   }
   function switchTarget(index: number): void {
@@ -754,7 +823,7 @@ export function LoopPracticeView({
               melody={rangeMelody}
               pointsRef={pointsRef}
               duration={Math.max(0.1, duration)}
-              transpose={0}
+              transpose={transpose}
               octaveAlign={settings.octaveAlign}
               tolerance={settings.tolerance}
               mode="practice"
@@ -795,7 +864,7 @@ export function LoopPracticeView({
               </strong>
               <span>
                 {preroll
-                  ? `还有 ${Math.max(0, scoreStart - now).toFixed(1)} 秒进句`
+                  ? `还有 ${Math.max(0, (scoreStart - now) / speed).toFixed(1)} 秒进句`
                   : lastResult?.hitRate != null
                     ? `上一遍命中 ${Math.round(lastResult.hitRate * 100)}% · 第 ${pass} 遍进行中`
                     : `${formatTime(now)} / ${formatTime(duration)} · 每遍只统计高亮区`}

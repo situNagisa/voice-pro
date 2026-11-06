@@ -1,7 +1,7 @@
 import type { LoopRange } from '../audio/player'
 import type { Note, ReferenceMelody } from '../core/types'
 import type { PracticeRecord } from '../state/records'
-import { referenceMidiAt, compareToTarget } from './analysis'
+import { referenceMidiAt, compareToTarget, pointTranspose } from './analysis'
 import type { PitchComparison, RawUserPoint } from './analysis'
 import { clamp } from './pitch'
 
@@ -50,10 +50,17 @@ export function readingAt(
   const targetMidi = melody
     ? referenceMidiAt(melody, point.t, options.transpose)
     : null
+  // 中途改调时，每个点用采样当时的移调来比较；显示的“目标”仍是当前调。
+  const shift = pointTranspose(point, options.transpose)
   const comparison =
     targetMidi == null
       ? null
-      : compareToTarget(point.midi, targetMidi, options.octaveAlign, options.tolerance)
+      : compareToTarget(
+          point.midi + (options.transpose - shift),
+          targetMidi,
+          options.octaveAlign,
+          options.tolerance,
+        )
   return { point, time: point.t, targetMidi, comparison }
 }
 
