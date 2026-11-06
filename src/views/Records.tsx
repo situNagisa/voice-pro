@@ -215,7 +215,8 @@ export function RecordsView({
         )}
 
         <p className="tiny-note center records-note">
-          记录只保存在本机。示例歌回看时会重新合成原唱；导入歌只保存元信息，原唱不可回放。
+          记录只保存在本机。示例歌回看时会重新合成原唱；导入歌回看时从歌曲库读取原曲与伴奏，
+          歌曲被删除后降级为只能回放你的录音。
         </p>
       </main>
     </div>

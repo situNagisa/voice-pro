@@ -344,3 +344,42 @@ export async function renderSong(
   normalize(buffer)
   return buffer
 }
+
+/**
+ * 示例歌分轨：人声与伴奏分别渲染并各自归一化，供“伴奏 / 原唱人声”播放模式使用。
+ * 与 renderSong 使用同一套合成逻辑，但不改变 renderSong 的混音结果。
+ */
+export async function renderSongStems(
+  spec: DemoSongSpec,
+  sampleRate: number = SAMPLE_RATE,
+): Promise<{ vocals: AudioBuffer; accompaniment: AudioBuffer }> {
+  const length = Math.ceil(songDurationSec(spec) * sampleRate)
+  const beatSec = 60 / spec.bpm
+
+  const vocalCtx = new OfflineAudioContext(2, length, sampleRate)
+  const vocalBus = vocalCtx.createGain()
+  vocalBus.gain.value = 1
+  vocalBus.connect(vocalCtx.destination)
+  scheduleVocal(vocalCtx, vocalBus, spec.melody, beatSec)
+
+  const bandCtx = new OfflineAudioContext(2, length, sampleRate)
+  const bandBus = bandCtx.createGain()
+  bandBus.gain.value = BAND_GAIN
+  bandBus.connect(bandCtx.destination)
+  const noise = makeNoiseBuffer(bandCtx)
+  spec.chords.forEach((chord, index) => {
+    const start = chord.beat * beatSec
+    const end = (chord.beat + chord.beats) * beatSec
+    schedulePad(bandCtx, bandBus, chord, start, end)
+    scheduleBass(bandCtx, bandBus, chord, start, end, index)
+  })
+  schedulePercussion(bandCtx, bandBus, spec, beatSec, noise)
+
+  const [vocals, accompaniment] = await Promise.all([
+    vocalCtx.startRendering(),
+    bandCtx.startRendering(),
+  ])
+  normalize(vocals)
+  normalize(accompaniment)
+  return { vocals, accompaniment }
+}

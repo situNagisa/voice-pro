@@ -1,4 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import {
+  acknowledgeLibraryJob,
+  clearLibrary,
+  formatBytes,
+  getLibraryUsage,
+} from '../library'
+import type { LibraryUsage } from '../library'
 import type { Settings } from '../state/settings'
 import { Notice, Segmented, Slider, Stepper, Toggle } from './controls'
 import { CloseIcon } from './icons'
@@ -11,6 +18,7 @@ interface SettingsSheetProps {
   onPatch: (patch: Partial<Settings>) => void
   onReset: () => void
   onClearRecords: () => void
+  onLibraryCleared: () => void
 }
 
 export function SettingsSheet({
@@ -21,7 +29,43 @@ export function SettingsSheet({
   onPatch,
   onReset,
   onClearRecords,
+  onLibraryCleared,
 }: SettingsSheetProps) {
+  const [usage, setUsage] = useState<LibraryUsage | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    let active = true
+    void getLibraryUsage()
+      .then((next) => {
+        if (active) setUsage(next)
+      })
+      .catch(() => {
+        if (active) setUsage(null)
+      })
+    return () => {
+      active = false
+    }
+  }, [open])
+
+  async function clearSongCache(): Promise<void> {
+    if (
+      !window.confirm(
+        '清空歌曲库？原曲、伴奏和分析结果都会删除，练习记录会保留（回看时只能听录音）。',
+      )
+    ) {
+      return
+    }
+    try {
+      await clearLibrary()
+      acknowledgeLibraryJob()
+      setUsage({ count: 0, bytes: 0, sourceBytes: 0, audioBytes: 0, melodyBytes: 0 })
+      onLibraryCleared()
+    } catch (error) {
+      console.warn('[voice-pro] 清空歌曲库失败', error)
+    }
+  }
+
   useEffect(() => {
     if (!open) return
     const onKey = (event: globalThis.KeyboardEvent) => {
@@ -79,7 +123,7 @@ export function SettingsSheet({
               max={6}
               onChange={(value) => onPatch({ transpose: value })}
               format={(value) => `${value > 0 ? '+' : ''}${value} 半音`}
-              hint="只移动参考条块与评分；v0.1 原曲播放不变调。"
+              hint="只移动参考条块与评分；原曲、伴奏播放不变调。"
             />
             {settings.transpose !== 0 && (
               <Notice tone="warn">
@@ -92,14 +136,14 @@ export function SettingsSheet({
           <section className="sheet-section">
             <h3>声音</h3>
             <Slider
-              label="原曲音量"
+              label="播放音量"
               value={Math.round(settings.volume * 100)}
               min={0}
               max={100}
               step={1}
               onChange={(value) => onPatch({ volume: value / 100 })}
               format={(value) => `${value}%`}
-              hint="没有伴奏分离，原曲就是伴奏。戴耳机时用能听清自己的音量。"
+              hint="练唱页默认播放去人声伴奏；戴耳机时调到能听清自己又跟得上节奏的音量。"
             />
             <Slider
               label="输入延迟补偿"
@@ -128,6 +172,24 @@ export function SettingsSheet({
 
           <section className="sheet-section">
             <h3>本机数据</h3>
+            <div className="sheet-data-row">
+              <div>
+                <strong>歌曲库</strong>
+                <span>
+                  {usage == null
+                    ? '正在统计占用空间…'
+                    : `${usage.count} 首 · ${formatBytes(usage.bytes)} · 原曲、伴奏、旋律`}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="btn small ghost-danger"
+                disabled={usage == null || usage.count === 0}
+                onClick={() => void clearSongCache()}
+              >
+                清空缓存
+              </button>
+            </div>
             <div className="sheet-data-row">
               <div>
                 <strong>练习记录</strong>
@@ -160,10 +222,10 @@ export function SettingsSheet({
           <section className="sheet-section about">
             <h3>关于音准镜</h3>
             <p>
-              本地实时音高对比工具。麦克风和录音都在设备上处理，不会上传。
+              本地实时音高对比工具。麦克风、录音、歌曲库与分轨都在设备上处理，不会上传。
               示例歌为本地合成，不需要网络。
             </p>
-            <p className="muted">v0.1 · React + Web Audio</p>
+            <p className="muted">v0.3 · React + Web Audio</p>
           </section>
         </div>
       </aside>

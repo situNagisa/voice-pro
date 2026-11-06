@@ -1,5 +1,5 @@
 import { listDemoSongs } from '../demo'
-import { renderDemoSong } from '../demo'
+import { renderDemoSong, renderDemoStems } from '../demo'
 import { DEMO_SONG_SPECS } from '../demo/songs'
 import type { Note, ReferenceMelody } from '../core/types'
 import type { LoadedSong } from './session'
@@ -35,7 +35,13 @@ export function demoMelody(id: string, duration: number): ReferenceMelody {
 export async function loadDemoSong(id: string): Promise<LoadedSong> {
   const meta = listDemoSongs().find((song) => song.id === id)
   if (!meta) throw new Error('没有找到这首示例歌')
-  const buffer = await renderDemoSong(id)
+  const [buffer, stems] = await Promise.all([
+    renderDemoSong(id),
+    renderDemoStems(id).catch((error: unknown) => {
+      console.warn('[voice-pro] 示例歌分轨合成失败，只提供原曲', error)
+      return null
+    }),
+  ])
   return {
     id: `demo-${id}`,
     demoId: id,
@@ -44,5 +50,7 @@ export async function loadDemoSong(id: string): Promise<LoadedSong> {
     melody: demoMelody(id, buffer.duration),
     temporary: false,
     importedAt: Date.now(),
+    accompaniment: stems?.accompaniment ?? null,
+    vocals: stems?.vocals ?? null,
   }
 }

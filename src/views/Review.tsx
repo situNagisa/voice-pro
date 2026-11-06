@@ -5,8 +5,10 @@ import type { ReplayMode } from '../audio/clipPlayer'
 import { formatCents, formatTime, midiToNoteName } from '../audio/pitch'
 import { readingAt, recordMelody, voiceOffsetAt } from '../audio/review'
 import type { ReadingAt } from '../audio/review'
+import { loadLibrarySong } from '../library'
 import { loadDemoSong } from '../state/demo'
 import type { PracticeRecord } from '../state/records'
+import type { LoadedSong } from '../state/session'
 import { Notice, TopBar } from '../ui/controls'
 import { PauseIcon, PlayIcon, RefreshIcon, StopIcon } from '../ui/icons'
 import { PitchRoll } from '../ui/PitchRoll'
@@ -14,8 +16,8 @@ import { useIsDesktop } from '../ui/useMediaQuery'
 
 interface ReviewViewProps {
   record: PracticeRecord
-  /** 当前会话里还留着的原曲；从记录列表进来时通常为空 */
-  original: AudioBuffer | null
+  /** 当前会话里还留着的整首歌；从记录列表进来时为空，由本页从歌曲库/示例歌加载 */
+  initialSong: LoadedSong | null
   startAt: number
   onBack: () => void
 }
@@ -23,6 +25,7 @@ interface ReviewViewProps {
 const REPLAY_MODES: { value: ReplayMode; label: string }[] = [
   { value: 'voice', label: '我的声音' },
   { value: 'original', label: '原唱' },
+  { value: 'accompaniment', label: '伴奏' },
   { value: 'mix', label: '叠加' },
 ]
 
@@ -42,7 +45,7 @@ function scoreTone(score: number | null): string {
   return 'low'
 }
 
-export function ReviewView({ record, original, startAt, onBack }: ReviewViewProps) {
+export function ReviewView({ record, initialSong, startAt, onBack }: ReviewViewProps) {
   const isDesktop = useIsDesktop()
   const pointsRef = useRef(
     record.points.slice().sort((a, b) => a.t - b.t),
@@ -63,9 +66,10 @@ export function ReviewView({ record, original, startAt, onBack }: ReviewViewProp
   )
   const hitPercent = report.hitRate == null ? null : Math.round(report.hitRate * 100)
 
-  const [originalBuffer, setOriginalBuffer] = useState<AudioBuffer | null>(original)
-  const [originalLoading, setOriginalLoading] = useState(false)
-  const [originalError, setOriginalError] = useState<string | null>(null)
+  const [song, setSong] = useState<LoadedSong | null>(initialSong)
+  const [sourceLoading, setSourceLoading] = useState(false)
+  const [sourceError, setSourceError] = useState<string | null>(null)
+  const [libraryMissing, setLibraryMissing] = useState(false)
   const [voiceReady, setVoiceReady] = useState(false)
   const [voiceError, setVoiceError] = useState(false)
   const [mode, setMode] = useState<ReplayMode>('voice')
@@ -80,8 +84,8 @@ export function ReviewView({ record, original, startAt, onBack }: ReviewViewProp
   const mountedRef = useRef(true)
 
   useEffect(() => {
-    setOriginalBuffer(original)
-  }, [original])
+    setSong(initialSong)
+  }, [initialSong])
 
   useEffect(() => {
     mountedRef.current = true
@@ -93,27 +97,54 @@ export function ReviewView({ record, original, startAt, onBack }: ReviewViewProp
   }, [])
 
   useEffect(() => {
-    // 从记录列表进入示例歌时，现场重新合成原唱
-    if (originalBuffer || record.songKind !== 'demo') return
+    // 从记录列表进入时：示例歌重新合成，导入歌从歌曲库读取；歌被删掉就降级为只听录音。
+    if (initialSong) return
     let active = true
-    setOriginalLoading(true)
-    loadDemoSong(record.songId)
-      .then((song) => {
+    setSourceLoading(true)
+    setSourceError(null)
+    setLibraryMissing(false)
+    const task =
+      record.songKind === 'demo'
+        ? loadDemoSong(record.songId)
+        : loadLibrarySong(record.songId)
+    Promise.resolve(task)
+      .then((loaded) => {
         if (!active) return
-        setOriginalBuffer(song.buffer)
-        setOriginalError(null)
+        if (!loaded) {
+          setLibraryMissing(true)
+          setSourceError(
+            '这首歌已从歌曲库删除（或来自旧版本），原唱与伴奏不可用，只能回放你的录音。',
+          )
+          return
+        }
+        setSong(loaded)
       })
       .catch((err: unknown) => {
         if (!active) return
-        setOriginalError(err instanceof Error ? err.message : '原唱加载失败，只能回看音高曲线。')
+        setSourceError(
+          err instanceof Error
+            ? err.message
+            : '原曲加载失败，只能回放录音或查看音高曲线。',
+        )
       })
       .finally(() => {
-        if (active) setOriginalLoading(false)
+        if (active) setSourceLoading(false)
       })
     return () => {
       active = false
     }
-  }, [originalBuffer, record.songId, record.songKind])
+  }, [initialSong, record.songId, record.songKind])
+
+  const originalBuffer = song?.buffer ?? null
+  const accompanimentBuffer = song?.accompaniment ?? null
+  const vocalsBuffer = song?.vocals ?? null
+
+  useEffect(() => {
+    // 没有录音时默认切到一个能播的版本，避免打开页面就是不可用的“我的声音”。
+    if (record.voice && !voiceError) return
+    if (accompanimentBuffer) setMode('accompaniment')
+    else if (originalBuffer) setMode('original')
+  }, [record.voice, voiceError, accompanimentBuffer, originalBuffer])
 
   useEffect(() => {
     if (!record.voice) return
@@ -195,12 +226,22 @@ export function ReviewView({ record, original, startAt, onBack }: ReviewViewProp
       if (mountedRef.current) setPlaying(false)
     }
     const effectiveMode =
-      !originalBuffer && (mode === 'original' || mode === 'mix') ? 'voice' : mode
+      mode === 'accompaniment' && !accompanimentBuffer
+        ? 'voice'
+        : mode === 'vocals' && !vocalsBuffer
+          ? 'voice'
+          : mode === 'original' && !originalBuffer
+            ? 'voice'
+            : mode === 'mix' && !voiceReady
+              ? 'original'
+              : mode
     const voiceOffset = record.segments.length > 0
       ? voiceOffsetAt(record.segments, from)
       : from
     await clip.play({
       original: originalBuffer,
+      accompaniment: accompanimentBuffer,
+      vocals: vocalsBuffer,
       voice: voiceBufferRef.current,
       songTime: from,
       voiceOffset,
@@ -262,11 +303,14 @@ export function ReviewView({ record, original, startAt, onBack }: ReviewViewProp
   )
 
   const phraseStats = new Map(report.phrases.map((phrase) => [phrase.index, phrase]))
-  const canPlay = mode === 'original'
-    ? originalBuffer != null
-    : mode === 'mix'
-      ? voiceReady || originalBuffer != null
-      : voiceReady
+  function modeEnabled(value: ReplayMode): boolean {
+    if (value === 'voice') return voiceReady
+    if (value === 'original') return originalBuffer != null
+    if (value === 'accompaniment') return accompanimentBuffer != null
+    if (value === 'vocals') return vocalsBuffer != null
+    return voiceReady && (accompanimentBuffer != null || originalBuffer != null)
+  }
+  const canPlay = modeEnabled(mode)
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -379,35 +423,33 @@ export function ReviewView({ record, original, startAt, onBack }: ReviewViewProp
           <div className="replay-head">
             <span>回放</span>
             <span className="tiny-note">
-              {originalLoading
-                ? '正在准备原唱…'
-                : originalBuffer
-                  ? '原唱已就绪'
-                  : '原唱不可用，仅能回放录音'}
+              {sourceLoading
+                ? record.songKind === 'demo'
+                  ? '正在准备原唱…'
+                  : '正在从歌曲库读取…'
+                : accompanimentBuffer
+                  ? '伴奏已就绪'
+                  : originalBuffer
+                    ? '原曲已就绪'
+                    : '原唱不可用，仅能回放录音'}
             </span>
           </div>
-          <div className="segmented compact" role="group" aria-label="回放内容">
-            {REPLAY_MODES.map((item) => {
-              const disabled =
-                !voiceReady && item.value !== 'original'
-                  ? true
-                  : !originalBuffer && item.value !== 'voice'
-              return (
-                <button
-                  key={item.value}
-                  type="button"
-                  aria-pressed={mode === item.value}
-                  disabled={disabled}
-                  className={mode === item.value ? 'active' : ''}
-                  onClick={() => {
-                    stopPlayback()
-                    setMode(item.value)
-                  }}
-                >
-                  {item.label}
-                </button>
-              )
-            })}
+          <div className="segmented compact review-modes" role="group" aria-label="回放内容">
+            {REPLAY_MODES.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                aria-pressed={mode === item.value}
+                disabled={!modeEnabled(item.value)}
+                className={mode === item.value ? 'active' : ''}
+                onClick={() => {
+                  stopPlayback()
+                  setMode(item.value)
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
           <div className="review-player-actions">
             <button
@@ -430,7 +472,14 @@ export function ReviewView({ record, original, startAt, onBack }: ReviewViewProp
             <p className="tiny-note">正在解码录音…</p>
           )}
           {voiceError && <p className="tiny-note">录音解码失败，暂时只能回看音高轨迹。</p>}
-          {originalError && <Notice tone="warn">{originalError}</Notice>}
+          {sourceError && <Notice tone="warn">{sourceError}</Notice>}
+          {libraryMissing && (
+            <p className="tiny-note">
+              {/^[0-9a-f]{64}$/.test(record.songId)
+                ? '重新导入同一首歌后，这条记录也会重新关联到歌曲库。'
+                : '这条记录来自旧版本，重新导入也只会关联新的练习记录。'}
+            </p>
+          )}
           {!record.voice && <p className="tiny-note">这次练习没有保存到录音。</p>}
         </section>
 

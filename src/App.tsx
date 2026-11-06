@@ -31,7 +31,7 @@ type Overlay =
   | {
       kind: 'review'
       record: PracticeRecord
-      original: AudioBuffer | null
+      song: LoadedSong | null
       startAt: number
       returnTo: Overlay | null
     }
@@ -44,6 +44,7 @@ function App() {
   const [records, setRecords] = useState<PracticeRecordMeta[]>([])
   const [recordsLoading, setRecordsLoading] = useState(true)
   const [openingRecord, setOpeningRecord] = useState(false)
+  const [libraryRevision, setLibraryRevision] = useState(0)
 
   async function refreshRecords(): Promise<void> {
     setRecordsLoading(true)
@@ -87,7 +88,7 @@ function App() {
     setOverlay({
       kind: 'review',
       record: result.record,
-      original: result.song.buffer,
+      song: result.song,
       startAt,
       returnTo: reportOverlay,
     })
@@ -109,7 +110,7 @@ function App() {
       setOverlay({
         kind: 'review',
         record,
-        original: null,
+        song: null,
         startAt: startPoint?.t ?? targetStart,
         returnTo: null,
       })
@@ -202,7 +203,7 @@ function App() {
       <ReviewView
         key={overlay.record.id}
         record={overlay.record}
-        original={overlay.original}
+        initialSong={overlay.song}
         startAt={overlay.startAt}
         onBack={() => setOverlay(overlay.returnTo)}
       />
@@ -213,6 +214,8 @@ function App() {
         {tab === 'songs' && (
           <SongsHome
             settings={settings}
+            records={records}
+            libraryRevision={libraryRevision}
             onSong={openSong}
             onOpenSettings={() => setSettingsOpen(true)}
           />
@@ -255,6 +258,7 @@ function App() {
         onPatch={patchSettings}
         onReset={() => setSettings({ ...DEFAULT_SETTINGS })}
         onClearRecords={() => void clearAllRecords()}
+        onLibraryCleared={() => setLibraryRevision((value) => value + 1)}
       />
     </div>
   )

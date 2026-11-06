@@ -1,6 +1,6 @@
 import { markSyntheticAudio } from '../core/audioFlags'
 import { DEMO_SONG_SPECS, songDurationSec } from './songs'
-import { renderSong } from './synth'
+import { renderSong, renderSongStems } from './synth'
 
 /** 内置示例歌曲：本地合成（"人声"旋律 + 伴奏），让没有音频文件的用户也能马上体验。 */
 export interface DemoSong {
@@ -20,6 +20,12 @@ const CATALOG: readonly DemoSong[] = DEMO_SONG_SPECS.map((spec) => ({
 
 /** 同一首歌只合成一次，之后的调用直接复用内存里的 AudioBuffer */
 const cache = new Map<string, Promise<AudioBuffer>>()
+
+/** 分轨单独缓存，供伴奏/原唱人声播放模式使用。 */
+const stemCache = new Map<
+  string,
+  Promise<{ vocals: AudioBuffer; accompaniment: AudioBuffer }>
+>()
 
 export function listDemoSongs(): DemoSong[] {
   return CATALOG.map((song) => ({ ...song }))
@@ -47,5 +53,33 @@ export async function renderDemoSong(id: string): Promise<AudioBuffer> {
       throw error
     })
   cache.set(id, task)
+  return task
+}
+
+/** 合成示例歌的人声/伴奏分轨；与 renderDemoSong 共用同一份乐谱。 */
+export async function renderDemoStems(
+  id: string,
+): Promise<{ vocals: AudioBuffer; accompaniment: AudioBuffer }> {
+  const spec = DEMO_SONG_SPECS.find((song) => song.id === id)
+  if (!spec) {
+    throw new Error(`未找到示例歌曲：${id}`)
+  }
+
+  const cached = stemCache.get(id)
+  if (cached) return cached
+
+  if (typeof OfflineAudioContext === 'undefined') {
+    throw new Error('当前环境不支持离线音频合成')
+  }
+
+  // 分轨体积约为原曲的两倍，只保留最近一首，避免手机内存被示例歌占满。
+  for (const key of stemCache.keys()) {
+    if (key !== id) stemCache.delete(key)
+  }
+  const task = renderSongStems(spec).catch((error: unknown) => {
+    stemCache.delete(id)
+    throw error
+  })
+  stemCache.set(id, task)
   return task
 }

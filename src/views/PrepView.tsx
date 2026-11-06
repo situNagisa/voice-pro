@@ -57,6 +57,7 @@ export function PrepView({ song, settings, onBack, onStart }: PrepViewProps) {
             </p>
             <div className="tag-row">
               <span className="tag">目标 ±{settings.tolerance} 音分</span>
+              <span className="tag">{song.accompaniment ? '伴奏已就绪' : '仅原曲'}</span>
               <span className="tag">{settings.octaveAlign ? '八度已对齐' : '严格同八度'}</span>
               {settings.transpose !== 0 && (
                 <span className="tag warn">
@@ -68,7 +69,7 @@ export function PrepView({ song, settings, onBack, onStart }: PrepViewProps) {
           </div>
         </section>
 
-        {song.temporary && (
+        {(song.temporary || song.warning) && (
           <div className="notice warn">
             {song.warning ?? '参考旋律来自简易检测，可能把伴奏误判成旋律，报告仅供粗略参考。'}
           </div>
@@ -81,7 +82,9 @@ export function PrepView({ song, settings, onBack, onStart }: PrepViewProps) {
             <div>
               <strong>戴耳机，听清自己</strong>
               <span>
-                原曲会直接播放，v0.1 还没有伴奏分离。外放时麦克风会收到原曲，曲线会跟着伴奏跑。
+                {song.accompaniment
+                  ? '练唱页默认播放去人声伴奏，需要参考时可以切到原唱人声。外放时麦克风仍会收到伴奏，曲线容易跟着跑。'
+                  : '这首歌没有可用的伴奏分离结果，会直接播放原曲。外放时麦克风会收到原曲，曲线容易跟着跑。'}
               </span>
             </div>
           </div>
@@ -111,7 +114,7 @@ export function PrepView({ song, settings, onBack, onStart }: PrepViewProps) {
           <div key={countdown} className="countdown-number">
             {countdown > 0 ? countdown : '唱'}
           </div>
-          <p className="countdown-hint">准备好，跟着原曲开口</p>
+          <p className="countdown-hint">准备好，跟着{song.accompaniment ? '伴奏' : '原曲'}开口</p>
         </div>
       )}
     </div>

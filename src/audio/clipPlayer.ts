@@ -1,9 +1,16 @@
 import { clamp } from './pitch'
 
-export type ReplayMode = 'voice' | 'original' | 'mix'
+export type ReplayMode =
+  | 'voice'
+  | 'original'
+  | 'accompaniment'
+  | 'vocals'
+  | 'mix'
 
 export interface PlayClipOptions {
   original: AudioBuffer | null
+  accompaniment?: AudioBuffer | null
+  vocals?: AudioBuffer | null
   voice: AudioBuffer | null
   /** 歌曲时间轴上的起点（秒） */
   songTime: number
@@ -14,8 +21,9 @@ export interface PlayClipOptions {
 }
 
 /**
- * 回放“我的声音 / 原唱 / 叠加”。
- * 原唱与录音各自从指定偏移开始，位置统一按 AudioContext 时钟推进。
+ * 回放“我的声音 / 原曲 / 伴奏 / 原唱人声 / 叠加”。
+ * 原曲与录音各自从指定偏移开始，位置统一按 AudioContext 时钟推进。
+ * 叠加优先用伴奏垫底，没有分轨时回退到原曲。
  */
 export class ClipPlayer {
   readonly ctx: AudioContext
@@ -45,26 +53,36 @@ export class ClipPlayer {
     this.volume = clamp(options.volume ?? 0.9, 0, 1)
     this.master.gain.setValueAtTime(this.volume, this.ctx.currentTime)
 
-    const wantOriginal = (options.mode === 'original' || options.mode === 'mix') && options.original
-    const wantVoice = (options.mode === 'voice' || options.mode === 'mix')
-      && options.voice
-      && options.voiceOffset != null
+    const backing = options.accompaniment ?? options.original
+    let chosen: AudioBuffer | null = null
+    if (options.mode === 'original') chosen = options.original
+    else if (options.mode === 'accompaniment') chosen = options.accompaniment ?? null
+    else if (options.mode === 'vocals') chosen = options.vocals ?? null
+    else if (options.mode === 'mix') chosen = backing
 
-    const original = options.original
-    const voice = options.voice
-    const timelineDuration = original?.duration ?? voice?.duration ?? 0
+    const wantVoice =
+      (options.mode === 'voice' || options.mode === 'mix') &&
+      options.voice != null &&
+      options.voiceOffset != null
+
+    const timelineDuration =
+      options.original?.duration ??
+      options.accompaniment?.duration ??
+      options.vocals?.duration ??
+      options.voice?.duration ??
+      0
     const songTime = clamp(options.songTime, 0, Math.max(0, timelineDuration - 0.01))
     let duration = 0
 
     const startAt = this.ctx.currentTime + 0.04
     const sources: AudioBufferSourceNode[] = []
 
-    if (wantOriginal && original) {
-      const offset = clamp(songTime, 0, Math.max(0, original.duration - 0.01))
-      const available = original.duration - offset
+    if (chosen) {
+      const offset = clamp(songTime, 0, Math.max(0, chosen.duration - 0.01))
+      const available = chosen.duration - offset
       if (available > 0.02) {
         const source = this.ctx.createBufferSource()
-        source.buffer = original
+        source.buffer = chosen
         source.connect(this.master)
         source.start(startAt, offset, available)
         sources.push(source)
@@ -72,12 +90,12 @@ export class ClipPlayer {
       }
     }
 
-    if (wantVoice && voice && options.voiceOffset != null) {
-      const offset = clamp(options.voiceOffset, 0, Math.max(0, voice.duration - 0.01))
-      const available = voice.duration - offset
+    if (wantVoice && options.voice && options.voiceOffset != null) {
+      const offset = clamp(options.voiceOffset, 0, Math.max(0, options.voice.duration - 0.01))
+      const available = options.voice.duration - offset
       if (available > 0.02) {
         const source = this.ctx.createBufferSource()
-        source.buffer = voice
+        source.buffer = options.voice
         source.connect(this.master)
         source.start(startAt, offset, available)
         sources.push(source)

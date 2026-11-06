@@ -14,6 +14,10 @@ export interface LoadedSong {
   importedAt: number
   /** 内置示例歌的原始 id，用于练习记录回看时重新合成原唱。 */
   demoId?: string
+  /** 人声分离出的伴奏；没有分离结果时为 null/undefined。 */
+  accompaniment?: AudioBuffer | null
+  /** 人声分离出的原唱人声；没有分离结果时为 null/undefined。 */
+  vocals?: AudioBuffer | null
 }
 
 export interface PracticeSession {

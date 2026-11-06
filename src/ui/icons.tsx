@@ -175,6 +175,16 @@ export function TrashIcon(props: IconProps) {
   )
 }
 
+export function PencilIcon(props: IconProps) {
+  return base(
+    props,
+    <>
+      <path d="M4.5 19.5h4l10-10a2.1 2.1 0 0 0-3-3l-10 10v3Z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="m14.2 7.8 3 3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </>,
+  )
+}
+
 export function RefreshIcon(props: IconProps) {
   return base(
     props,

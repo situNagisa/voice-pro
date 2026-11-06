@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { InputSource } from '../audio/capture'
 import { mediaErrorMessage, PitchCapture } from '../audio/capture'
 import { ClipPlayer } from '../audio/clipPlayer'
@@ -11,7 +11,7 @@ import { VoiceRecorder } from '../audio/recorder'
 import type { RawUserPoint } from '../audio/analysis'
 import { formatCents, formatTime, midiToNoteName } from '../audio/pitch'
 import { SongPlayer } from '../audio/player'
-import type { LoopRange } from '../audio/player'
+import type { LoopRange, SongTrack } from '../audio/player'
 import type { PracticeRecord } from '../state/records'
 import { saveRecord } from '../state/records'
 import type { LoadedSong } from '../state/session'
@@ -53,10 +53,18 @@ interface CurrentReading {
   t: number
 }
 
-const REPLAY_LABELS: { value: ReplayMode; label: string }[] = [
-  { value: 'voice', label: '我的声音' },
-  { value: 'original', label: '原唱' },
-  { value: 'mix', label: '叠加' },
+const REPLAY_LABELS: Record<ReplayMode, string> = {
+  voice: '我的声音',
+  original: '原曲',
+  accompaniment: '伴奏',
+  vocals: '原唱人声',
+  mix: '叠加',
+}
+
+const PLAYBACK_TRACKS: { value: SongTrack; label: string }[] = [
+  { value: 'original', label: '原曲' },
+  { value: 'accompaniment', label: '伴奏' },
+  { value: 'vocals', label: '原唱人声' },
 ]
 
 function newRecordId(): string {
@@ -90,6 +98,9 @@ export function PracticeView({
   const [replayMode, setReplayMode] = useState<ReplayMode>('voice')
   const [replayPlaying, setReplayPlaying] = useState(false)
   const [statusText, setStatusText] = useState('正在打开麦克风…')
+  const [playbackMode, setPlaybackMode] = useState<SongTrack>(
+    song.accompaniment ? 'accompaniment' : 'original',
+  )
 
   const playerRef = useRef<SongPlayer | null>(null)
   const captureRef = useRef<PitchCapture | null>(null)
@@ -108,8 +119,29 @@ export function PracticeView({
   const lastUiRef = useRef(0)
   const currentRef = useRef<CurrentReading | null>(null)
   const latencyRef = useRef(60)
+  const playbackModeRef = useRef(playbackMode)
 
   settingsRef.current = settings
+  playbackModeRef.current = playbackMode
+
+  const hasAccompaniment = song.accompaniment != null
+  const hasVocals = song.vocals != null
+  const replayModes = useMemo(() => {
+    const modes: { value: ReplayMode; label: string }[] = [
+      { value: 'voice', label: REPLAY_LABELS.voice },
+    ]
+    if (hasAccompaniment) {
+      modes.push({ value: 'accompaniment', label: REPLAY_LABELS.accompaniment })
+    }
+    if (hasVocals) {
+      modes.push({ value: 'vocals', label: REPLAY_LABELS.vocals })
+    }
+    if (!hasAccompaniment) {
+      modes.push({ value: 'original', label: REPLAY_LABELS.original })
+    }
+    modes.push({ value: 'mix', label: REPLAY_LABELS.mix })
+    return modes
+  }, [hasAccompaniment, hasVocals])
 
   useEffect(() => {
     mountedRef.current = true
@@ -161,7 +193,17 @@ export function PracticeView({
     let player: SongPlayer | null = null
     let capture: PitchCapture | null = null
     try {
-      player = new SongPlayer(song.buffer)
+      player = new SongPlayer(song.buffer, {
+        accompaniment: song.accompaniment ?? null,
+        vocals: song.vocals ?? null,
+      })
+      const mode = playbackModeRef.current
+      const availableMode =
+        (mode === 'accompaniment' && !song.accompaniment) ||
+        (mode === 'vocals' && !song.vocals)
+          ? 'original'
+          : mode
+      player.setMode(availableMode)
       playerRef.current = player
       player.setVolume(settingsRef.current.volume)
       await player.resume()
@@ -290,6 +332,19 @@ export function PracticeView({
     setReplayPlaying(false)
   }
 
+  function changePlaybackMode(mode: SongTrack): void {
+    setPlaybackMode(mode)
+    playbackModeRef.current = mode
+    playerRef.current?.setMode(mode)
+  }
+
+  function modePlayable(mode: ReplayMode): boolean {
+    if (mode === 'voice' || mode === 'mix') return voiceReady
+    if (mode === 'accompaniment') return hasAccompaniment
+    if (mode === 'vocals') return hasVocals
+    return true
+  }
+
   async function pauseSession(): Promise<void> {
     const player = playerRef.current
     if (!player || finishingRef.current) return
@@ -360,7 +415,11 @@ export function PracticeView({
     }
     let from = cursorRef.current ?? pausedAtRef.current ?? 0
     // 刚暂停时游标就在录音末尾，直接播放会没有声音；回退 3 秒让用户听到刚唱的内容
-    if (cursorRef.current == null && replayMode !== 'original' && voiceBufferRef.current) {
+    if (
+      cursorRef.current == null &&
+      (replayMode === 'voice' || replayMode === 'mix') &&
+      voiceBufferRef.current
+    ) {
       const offset = voiceOffsetAt(segmentsRef.current, from)
       if (offset != null && voiceBufferRef.current.duration - offset < 0.6) {
         from = Math.max(0, from - 3)
@@ -384,6 +443,8 @@ export function PracticeView({
     }
     await clip.play({
       original: song.buffer,
+      accompaniment: song.accompaniment ?? null,
+      vocals: song.vocals ?? null,
       voice: voiceBufferRef.current,
       songTime: from,
       voiceOffset: voiceOffsetAt(segmentsRef.current, from),
@@ -505,6 +566,12 @@ export function PracticeView({
   }
 
   const effectiveSettings = settings
+  const volumeLabel =
+    playbackMode === 'accompaniment'
+      ? '伴奏音量'
+      : playbackMode === 'vocals'
+        ? '人声音量'
+        : '原曲音量'
   const cents = current?.cents ?? null
   const tone =
     cents == null
@@ -622,6 +689,31 @@ export function PracticeView({
         <main className={`page practice-page ${phase === 'paused' ? 'is-paused' : ''}`}>
           <div className="practice-stage">
             <section className="roll-card card">
+              <div className="roll-toolbar">
+                <span className="roll-toolbar-label">跟唱音轨</span>
+                <div className="segmented compact roll-track-switch" role="group" aria-label="跟唱音轨">
+                  {PLAYBACK_TRACKS.map((track) => {
+                    const available =
+                      track.value === 'original' ||
+                      (track.value === 'accompaniment' ? hasAccompaniment : hasVocals)
+                    return (
+                      <button
+                        key={track.value}
+                        type="button"
+                        aria-pressed={playbackMode === track.value}
+                        className={playbackMode === track.value ? 'active' : ''}
+                        disabled={!available || phase === 'starting'}
+                        onClick={() => changePlaybackMode(track.value)}
+                      >
+                        {track.label}
+                      </button>
+                    )
+                  })}
+                </div>
+                {!hasAccompaniment && (
+                  <span className="roll-track-note">这首歌没有人声分离结果</span>
+                )}
+              </div>
               <PitchRoll
                 melody={song.melody}
                 pointsRef={pointsRef}
@@ -672,7 +764,7 @@ export function PracticeView({
                 </div>
                 <div className="volume-inline">
                   <Slider
-                    label="原曲音量"
+                    label={volumeLabel}
                     value={Math.round(settings.volume * 100)}
                     min={0}
                     max={100}
@@ -765,12 +857,13 @@ export function PracticeView({
                     </span>
                   </div>
                   <div className="segmented compact" role="group" aria-label="回放内容">
-                    {REPLAY_LABELS.map((item) => (
+                    {replayModes.map((item) => (
                       <button
                         key={item.value}
                         type="button"
                         aria-pressed={replayMode === item.value}
                         className={replayMode === item.value ? 'active' : ''}
+                        disabled={!modePlayable(item.value)}
                         onClick={() => {
                           setReplayMode(item.value)
                           if (replayPlaying) stopReplay()
@@ -784,11 +877,11 @@ export function PracticeView({
                     <button
                       type="button"
                       className="btn secondary"
-                      disabled={snapshotLoading || (replayMode !== 'original' && !voiceReady)}
+                      disabled={!modePlayable(replayMode)}
                       onClick={() => void playReplay()}
                     >
                       {replayPlaying ? <StopIcon /> : <PlayIcon />}
-                      {replayPlaying ? '停止回放' : `播放${replayMode === 'voice' ? '我的声音' : replayMode === 'original' ? '原唱' : '叠加'}`}
+                      {replayPlaying ? '停止回放' : `播放${REPLAY_LABELS[replayMode]}`}
                     </button>
                     <button type="button" className="btn primary" onClick={() => void resumeSession()}>
                       <PlayIcon />
@@ -836,13 +929,13 @@ export function PracticeView({
               <span className="dock-time dim">{formatTime(song.buffer.duration)}</span>
 
               <div className="segmented compact dock-modes" role="group" aria-label="回放内容">
-                {REPLAY_LABELS.map((item) => (
+                {replayModes.map((item) => (
                   <button
                     key={item.value}
                     type="button"
                     aria-pressed={replayMode === item.value}
                     className={replayMode === item.value ? 'active' : ''}
-                    disabled={phase !== 'paused' || snapshotLoading || (item.value !== 'original' && !voiceReady)}
+                    disabled={phase !== 'paused' || !modePlayable(item.value)}
                     onClick={() => {
                       setReplayMode(item.value)
                       if (replayPlaying) stopReplay()
@@ -856,7 +949,7 @@ export function PracticeView({
               <button
                 type="button"
                 className="btn secondary dock-replay"
-                disabled={phase !== 'paused' || snapshotLoading || (replayMode !== 'original' && !voiceReady)}
+                disabled={phase !== 'paused' || !modePlayable(replayMode)}
                 onClick={() => void playReplay()}
               >
                 {replayPlaying ? <StopIcon /> : <PlayIcon />}
@@ -883,7 +976,7 @@ export function PracticeView({
                     : '正在跟唱 · 暂停后可回看'}
               </span>
               <label className="dock-volume">
-                <span>原曲音量</span>
+                <span>{volumeLabel}</span>
                 <input
                   type="range"
                   min={0}

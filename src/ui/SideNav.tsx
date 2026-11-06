@@ -68,7 +68,7 @@ export function SideNav({ active, onNavigate, onOpenSettings }: SideNavProps) {
           </span>
         </button>
         <p className="side-privacy">音频与录音仅在本机处理</p>
-        <span className="side-version">音准镜 v0.1</span>
+        <span className="side-version">音准镜 v0.3</span>
       </div>
     </aside>
   )
