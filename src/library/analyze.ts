@@ -2,6 +2,7 @@ import type { ReferenceMelody } from '../core/types'
 import { markSkipSeparation } from '../core/audioFlags'
 import { extractMelodyWithFallback } from '../audio/extract'
 import { separateVocals } from '../separation'
+import type { SeparationSpeed } from '../separation'
 
 export type AnalyzePhase = 'separate' | 'extract'
 
@@ -38,6 +39,7 @@ export async function analyzeSongAudio(
   audio: AudioBuffer,
   onProgress?: AnalyzeProgress,
   signal?: AbortSignal,
+  options: { separationSpeed?: SeparationSpeed } = {},
 ): Promise<SongAnalysis> {
   if (signal?.aborted) throw abortError()
 
@@ -58,6 +60,7 @@ export async function analyzeSongAudio(
       audio,
       (stage, ratio) => notify(stage, ratio, 'separate'),
       signal,
+      { speed: options.separationSpeed },
     )
     vocals = separated.vocals
     accompaniment = separated.accompaniment

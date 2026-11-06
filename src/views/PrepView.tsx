@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { hasCalibration, latestProfile, profileSummary } from '../audio/calibration'
 import type { InputSource } from '../audio/capture'
 import { adviseKey } from '../audio/keyAdvisor'
 import { formatTime } from '../audio/pitch'
@@ -17,6 +18,7 @@ interface PrepViewProps {
   onStart: (source: InputSource) => void
   onPatchSettings: (patch: Partial<Settings>) => void
   onOpenPrivacy: () => void
+  onOpenCalibration: () => void
 }
 
 export function PrepView({
@@ -27,6 +29,7 @@ export function PrepView({
   onStart,
   onPatchSettings,
   onOpenPrivacy,
+  onOpenCalibration,
 }: PrepViewProps) {
   const [source, setSource] = useState<InputSource>('mic')
   const [countdown, setCountdown] = useState<number | null>(null)
@@ -74,6 +77,8 @@ export function PrepView({
 
   const seconds = song.buffer.duration
   const noteCount = song.melody.notes.length
+  const lastCalibration = latestProfile(settings.latencyProfiles)
+  const calibrated = hasCalibration(settings.latencyMs, settings.latencyProfiles)
 
   return (
     <div className="screen prep-screen">
@@ -193,7 +198,28 @@ export function PrepView({
             format={(value) => `${value > 0 ? '+' : ''}${value} 半音`}
             hint="参考旋律、伴奏与原曲一起变调，速度不变；练唱中也能随时再改。"
           />
-          <div className="prep-tip">
+          <div className={`prep-calib-row ${calibrated ? 'is-ready' : ''}`}>
+              <div>
+                <strong>
+                  {settings.latencyMs != null
+                    ? `手动补偿 ${settings.latencyMs} ms`
+                    : calibrated
+                      ? '延迟已校准'
+                      : '还没校准延迟'}
+                </strong>
+                <span>
+                  {settings.latencyMs != null
+                    ? '当前用手动值；校准后会改用按输出设备自动套用的结果。'
+                    : lastCalibration
+                      ? `${profileSummary(lastCalibration)}。换耳机或外放后可以再测。`
+                      : '第一次用这副耳机 / 这个外放？花 20 秒测一次，起音和节奏判定会更准。'}
+                </span>
+              </div>
+              <button type="button" className="btn secondary small" onClick={onOpenCalibration}>
+                {calibrated ? '重新校准' : '校准延迟'}
+              </button>
+            </div>
+            <div className="prep-tip">
             <HeadphonesIcon />
             <div>
               <strong>戴耳机，听清自己</strong>

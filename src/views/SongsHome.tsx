@@ -23,12 +23,14 @@ import { loadDemoSong } from '../state/demo'
 import type { PracticeRecordMeta } from '../state/records'
 import type { LoadedSong } from '../state/session'
 import type { Settings } from '../state/settings'
+import { effectiveSeparationSpeed } from '../state/settings'
 import { Notice, ProgressBar } from '../ui/controls'
 import {
   CheckIcon,
   ChevronRightIcon,
   CloseIcon,
   HeadphonesIcon,
+  LyricsIcon,
   MusicIcon,
   PencilIcon,
   PlusIcon,
@@ -36,6 +38,7 @@ import {
   TrashIcon,
   UploadIcon,
 } from '../ui/icons'
+import { LyricSheet } from '../ui/LyricSheet'
 
 interface SongsHomeProps {
   settings: Settings
@@ -46,6 +49,8 @@ interface SongsHomeProps {
   onSong: (song: LoadedSong) => void
   onOpenSettings: () => void
   onOpenPrivacy: () => void
+  onGoTuner: () => void
+  onGoCoach: () => void
 }
 
 const ACCEPTED_EXTENSIONS = ['mp3', 'm4a', 'wav', 'flac', 'ogg']
@@ -67,6 +72,8 @@ export function SongsHome({
   onSong,
   onOpenSettings,
   onOpenPrivacy,
+  onGoTuner,
+  onGoCoach,
 }: SongsHomeProps) {
   const demos = listDemoSongs()
   const [demoBusy, setDemoBusy] = useState<string | null>(null)
@@ -79,6 +86,8 @@ export function SongsHome({
   const [libraryLoading, setLibraryLoading] = useState(true)
   const [renameId, setRenameId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [lyricsSong, setLyricsSong] = useState<LoadedSong | null>(null)
+  const [lyricsLoadingId, setLyricsLoadingId] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
   const dragDepthRef = useRef(0)
   const mountedRef = useRef(true)
@@ -207,13 +216,32 @@ export function SongsHome({
         if (mountedRef.current) onSong(song)
         return
       }
-      const started = startLibraryImport(file, hash)
+      const started = startLibraryImport(file, hash, effectiveSeparationSpeed(settings))
       if (!started) setError('已有歌曲正在分析，请等它完成。')
     } catch (err) {
       setError(errorMessage(err, '导入失败，请重试。'))
     } finally {
       setChecking(false)
       setOpeningId(null)
+    }
+  }
+
+  async function openLyrics(song: LibrarySongMeta): Promise<void> {
+    if (lyricsLoadingId != null || lyricsSong != null) return
+    setError(null)
+    setLyricsLoadingId(song.id)
+    try {
+      const loaded = await loadLibrarySong(song.id)
+      if (!loaded) {
+        setError('这首歌的缓存不完整，无法编辑歌词。请重新导入。')
+        await refreshLibrary()
+        return
+      }
+      if (mountedRef.current) setLyricsSong(loaded)
+    } catch (err) {
+      setError(errorMessage(err, '打开歌曲失败，暂时无法编辑歌词。'))
+    } finally {
+      if (mountedRef.current) setLyricsLoadingId(null)
     }
   }
 
@@ -421,7 +449,7 @@ export function SongsHome({
                   type="button"
                   className="text-btn"
                   onClick={() => {
-                    if (!resumeLibraryImport()) setError('继续分析失败，请重试。')
+                    if (!resumeLibraryImport(effectiveSeparationSpeed(settings))) setError('继续分析失败，请重试。')
                   }}
                 >
                   继续分析
@@ -455,7 +483,16 @@ export function SongsHome({
                 onCancel={cancelImport}
               />
               <p className="tiny-note">
-                可以切到音准仪练耳，分析会在后台继续；完成后这里会提示。
+                {job.stage.includes('分离')
+                  ? '分离可能需要几分钟，可以先去做点别的：'
+                  : '分析会在后台继续，完成后这里会提示。可以先去：'}
+                <button type="button" className="text-btn" onClick={onGoTuner}>
+                  音准仪
+                </button>
+                <button type="button" className="text-btn" onClick={onGoCoach}>
+                  练声小课
+                </button>
+                。分析不会中断。
               </p>
             </>
           )}
@@ -498,7 +535,7 @@ export function SongsHome({
                     type="button"
                     className="text-btn"
                     onClick={() => {
-                      if (!resumeLibraryImport()) setError('重试失败，请重新导入文件。')
+                      if (!resumeLibraryImport(effectiveSeparationSpeed(settings))) setError('重试失败，请重新导入文件。')
                     }}
                   >
                     重试分析
@@ -619,6 +656,16 @@ export function SongsHome({
                           </span>
                         </div>
                         <div className="library-actions">
+                          <button
+                            type="button"
+                            className="icon-btn tiny"
+                            aria-label={`编辑 ${song.name} 的歌词`}
+                            title="歌词"
+                            disabled={importBusy || lyricsLoadingId != null}
+                            onClick={() => void openLyrics(song)}
+                          >
+                            {lyricsLoadingId === song.id ? <i className="spinner" /> : <LyricsIcon />}
+                          </button>
                           <button
                             type="button"
                             className="icon-btn tiny"
@@ -759,6 +806,17 @@ export function SongsHome({
             <span>mp3 · m4a · wav · flac · ogg</span>
           </div>
         </div>
+      )}
+
+      {lyricsSong && (
+        <LyricSheet
+          song={lyricsSong}
+          onClose={() => setLyricsSong(null)}
+          onSaved={() => {
+            setLyricsSong(null)
+            setError(null)
+          }}
+        />
       )}
     </div>
   )

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { resolveLatencyMs } from '../audio/calibration'
 import type { InputSource } from '../audio/capture'
 import { mediaErrorMessage, PitchCapture } from '../audio/capture'
 import { ClipPlayer } from '../audio/clipPlayer'
@@ -13,6 +14,7 @@ import { formatCents, formatTime, midiToNoteName } from '../audio/pitch'
 import { SongPlayer } from '../audio/player'
 import type { LoopRange, SongTrack } from '../audio/player'
 import { processBuffer } from '../audio/transform'
+import { useSongLyrics } from '../lyrics'
 import type { PracticeRecord } from '../state/records'
 import { saveRecord } from '../state/records'
 import type { LoadedSong } from '../state/session'
@@ -25,6 +27,8 @@ import {
   RefreshIcon,
   StopIcon,
 } from '../ui/icons'
+import { LyricSheet } from '../ui/LyricSheet'
+import { LyricStrip } from '../ui/LyricStrip'
 import { PitchRoll } from '../ui/PitchRoll'
 
 export interface PracticeResult {
@@ -106,6 +110,8 @@ export function PracticeView({
   const [trackBusy, setTrackBusy] = useState<SongTrack | null>(null)
   const [transposeBusy, setTransposeBusy] = useState(false)
   const [replayBusy, setReplayBusy] = useState(false)
+  const [lyricsOpen, setLyricsOpen] = useState(false)
+  const { lyrics, setLyrics } = useSongLyrics(song)
 
   const playerRef = useRef<SongPlayer | null>(null)
   const captureRef = useRef<PitchCapture | null>(null)
@@ -359,7 +365,12 @@ export function PracticeView({
         return
       }
       captureRef.current = capture
-      latencyRef.current = settingsRef.current.latencyMs ?? Math.max(0, Math.round(capture.latencyMs))
+      latencyRef.current = await resolveLatencyMs(
+        settingsRef.current.latencyMs,
+        settingsRef.current.latencyProfiles,
+        settingsRef.current.lastOutputKind,
+        Math.max(0, Math.round(capture.latencyMs)),
+      )
 
       const stream = capture.mediaStream
       let recorder: VoiceRecorder | null = null
@@ -493,6 +504,16 @@ export function PracticeView({
     } finally {
       setSnapshotLoading(false)
     }
+  }
+
+  function openLyricsEditor(): void {
+    if (phase === 'active') {
+      void pauseSession().then(() => {
+        if (mountedRef.current) setLyricsOpen(true)
+      })
+      return
+    }
+    setLyricsOpen(true)
   }
 
   async function resumeSession(): Promise<void> {
@@ -752,7 +773,7 @@ export function PracticeView({
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.repeat) return
-      if (document.querySelector('.settings-sheet')) return
+      if (document.querySelector('.settings-sheet, .lyrics-layer')) return
       const target = event.target as HTMLElement | null
       if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
       if (event.code === 'Space') {
@@ -908,6 +929,13 @@ export function PracticeView({
                 onPick={pickTime}
                 ariaLabel="练唱音高卷帘：白色圆点为点选位置"
                 playheadLabel={phase === 'paused' ? '暂停' : '现在'}
+              />
+              <LyricStrip
+                lyrics={lyrics}
+                time={phase === 'paused' ? cursor ?? pausedAt ?? now : now}
+                label="歌词"
+                onImport={song.demoId ? undefined : openLyricsEditor}
+                onSeek={phase === 'paused' ? pickTime : undefined}
               />
               <div className="roll-legend">
                 <span><i className="dot good" />准</span>
@@ -1175,6 +1203,18 @@ export function PracticeView({
             </div>
           )}
         </main>
+      )}
+
+      {lyricsOpen && (
+        <LyricSheet
+          song={song}
+          initialLyrics={lyrics ?? undefined}
+          onClose={() => setLyricsOpen(false)}
+          onSaved={(next) => {
+            setLyrics(next)
+            setLyricsOpen(false)
+          }}
+        />
       )}
     </div>
   )

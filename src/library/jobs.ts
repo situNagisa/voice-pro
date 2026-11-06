@@ -1,4 +1,5 @@
 import { analyzeSongAudio } from './analyze'
+import type { SeparationSpeed } from '../separation'
 import { encodeAccompaniment, encodeVocals } from './audioStore'
 import {
   estimateMelodyBytes,
@@ -102,6 +103,7 @@ export function cancelLibraryImport(): void {
 export function startLibraryImport(
   file: File,
   precomputedHash?: string,
+  separationSpeed: SeparationSpeed = 'standard',
 ): boolean {
   if (currentJob?.status === 'running' || currentJob?.status === 'pending') {
     return false
@@ -128,7 +130,7 @@ export function startLibraryImport(
   emit()
   const controller = new AbortController()
   activeController = controller
-  void runImport(file, songName, controller, precomputedHash)
+  void runImport(file, songName, controller, precomputedHash, separationSpeed)
   return true
 }
 
@@ -176,7 +178,7 @@ export async function restoreLibraryJob(): Promise<void> {
 }
 
 /** 继续（或重试）上次没做完的分析。 */
-export function resumeLibraryImport(): boolean {
+export function resumeLibraryImport(separationSpeed: SeparationSpeed = 'standard'): boolean {
   if (!activeFile || !currentJob) return false
   if (currentJob.status !== 'pending' && currentJob.status !== 'error') return false
   const file = activeFile
@@ -196,7 +198,7 @@ export function resumeLibraryImport(): boolean {
   emit()
   const controller = new AbortController()
   activeController = controller
-  void runImport(file, songName, controller, id)
+  void runImport(file, songName, controller, id, separationSpeed)
   return true
 }
 
@@ -245,6 +247,7 @@ async function runImport(
   songName: string,
   controller: AbortController,
   precomputedHash?: string,
+  separationSpeed: SeparationSpeed = 'standard',
 ): Promise<void> {
   let separationStartedAt = 0
   let id: string | null = precomputedHash ?? activeSongId
@@ -316,6 +319,7 @@ async function runImport(
         })
       },
       controller.signal,
+      { separationSpeed },
     )
     throwIfAborted(controller.signal)
 

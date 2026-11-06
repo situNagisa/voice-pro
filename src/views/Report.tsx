@@ -4,6 +4,11 @@ import { evaluateSession } from '../audio/analysis'
 import { diagnoseSession } from '../audio/diagnosis'
 import { formatCents, formatTime, midiToNoteName } from '../audio/pitch'
 import { readingAt, recordMelody } from '../audio/review'
+import {
+  lyricForPhrase,
+  shortLyric,
+  useRecordLyrics,
+} from '../lyrics'
 import { practiceSeconds } from '../state/progress'
 import type { PracticeRecord } from '../state/records'
 import type { PracticeLoopTarget } from '../state/session'
@@ -63,6 +68,7 @@ export function ReportView({
     () => diagnoseSession(record, melody, report),
     [record, melody, report],
   )
+  const lyrics = useRecordLyrics(record)
   const phraseMap = useMemo(
     () => new Map(report.phrases.map((phrase) => [phrase.index, phrase])),
     [report.phrases],
@@ -85,6 +91,7 @@ export function ReportView({
   const [shareOpen, setShareOpen] = useState(false)
   const activeIndex = activePhraseIndex ?? focusIndex ?? report.phrases[0]?.index ?? null
   const activePhrase = report.phrases.find((phrase) => phrase.index === activeIndex) ?? null
+  const activePhraseLyric = activePhrase ? lyricForPhrase(lyrics, activePhrase) : null
   const previewCenterRef = useRef(
     activePhrase ? activePhrase.start + (activePhrase.end - activePhrase.start) / 2 : 0,
   )
@@ -117,25 +124,27 @@ export function ReportView({
     for (const index of indexes) {
       const phrase = phraseMap.get(index)
       if (!phrase) continue
+      const phraseLyric = lyricForPhrase(lyrics, phrase)
       targets.push({
         start: phrase.start,
         end: phrase.end,
-        label: `第 ${phrase.index + 1} 句`,
+        label: phraseLyric ? shortLyric(phraseLyric, 18) : `第 ${phrase.index + 1} 句`,
       })
     }
     if (targets.length > 0) onPracticeLoop(targets, label)
   }
 
   function practiceOne(phrase: { index: number; start: number; end: number }): void {
+    const phraseLyric = lyricForPhrase(lyrics, phrase)
     onPracticeLoop(
       [
         {
           start: phrase.start,
           end: phrase.end,
-          label: `第 ${phrase.index + 1} 句`,
+          label: phraseLyric ? shortLyric(phraseLyric, 18) : `第 ${phrase.index + 1} 句`,
         },
       ],
-      '单句循环',
+      phraseLyric ? `单句循环 · ${shortLyric(phraseLyric, 12)}` : '单句循环',
     )
   }
 
@@ -199,7 +208,13 @@ export function ReportView({
               {diagnoses.map((diagnosis) => {
                 const phraseLabels = diagnosis.phraseIndexes.flatMap((index) => {
                   const phrase = phraseMap.get(index)
-                  return phrase ? [`第 ${phrase.index + 1} 句`] : []
+                  if (!phrase) return []
+                  const phraseLyric = lyricForPhrase(lyrics, phrase)
+                  return [
+                    phraseLyric
+                      ? `「${shortLyric(phraseLyric, 14)}」`
+                      : `第 ${phrase.index + 1} 句`,
+                  ]
                 })
                 return (
                   <li key={diagnosis.id} className={`diagnosis-item tone-${diagnosis.tone}`}>
@@ -277,6 +292,7 @@ export function ReportView({
                 const rate = phrase.hitRate == null ? null : Math.round(phrase.hitRate * 100)
                 const tone = rate == null ? 'none' : rate >= 75 ? 'good' : rate >= 50 ? 'warn' : 'bad'
                 const isFocus = focusIndex === phrase.index
+                const phraseLyric = lyricForPhrase(lyrics, phrase)
                 return (
                   <li key={`${phrase.index}-${phrase.start}`}>
                     <button
@@ -286,11 +302,17 @@ export function ReportView({
                         if (isDesktop) selectPhrase(phrase)
                         else onReview(phrase.start)
                       }}
-                      aria-label={isDesktop ? `选中第 ${phrase.index + 1} 句` : `回看第 ${phrase.index + 1} 句`}
+                      aria-label={
+                        phraseLyric
+                          ? `${isDesktop ? '选中' : '回看'}「${shortLyric(phraseLyric, 24)}」`
+                          : isDesktop
+                            ? `选中第 ${phrase.index + 1} 句`
+                            : `回看第 ${phrase.index + 1} 句`
+                      }
                     >
                       <div className="phrase-row-top">
                         <span className="phrase-title">
-                          第 {phrase.index + 1} 句
+                          {phraseLyric ?? `第 ${phrase.index + 1} 句`}
                           {isFocus && <em>最需要练</em>}
                         </span>
                         <span className={`phrase-rate ${tone}`}>
@@ -339,7 +361,7 @@ export function ReportView({
             <div className="preview-head">
               <div className="preview-title">
                 <span className="eyebrow">选中句子</span>
-                <strong>第 {activePhrase.index + 1} 句</strong>
+                <strong>{activePhraseLyric ?? `第 ${activePhrase.index + 1} 句`}</strong>
                 <span>
                   {formatTime(activePhrase.start)} – {formatTime(activePhrase.end)}
                   {activePhrase.hitRate != null && ` · 命中 ${Math.round(activePhrase.hitRate * 100)}%`}

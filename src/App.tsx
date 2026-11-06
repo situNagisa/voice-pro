@@ -16,6 +16,7 @@ import type { PrivacyChoice } from './state/privacy'
 import { restoreLibraryJob } from './library'
 import { BottomNav } from './ui/BottomNav'
 import type { TabKey } from './ui/BottomNav'
+import { LatencyCalibrationDialog } from './ui/LatencyCalibrationDialog'
 import { PrivacyDialog } from './ui/PrivacyDialog'
 import { SettingsSheet } from './ui/SettingsSheet'
 import { SideNav } from './ui/SideNav'
@@ -58,6 +59,7 @@ function App() {
   const [settings, setSettings] = useState<Settings>(() => loadSettings())
   const [overlay, setOverlay] = useState<Overlay | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [calibrationOpen, setCalibrationOpen] = useState(false)
   const [records, setRecords] = useState<PracticeRecordMeta[]>([])
   const [recordsLoading, setRecordsLoading] = useState(true)
   const [openingRecord, setOpeningRecord] = useState(false)
@@ -95,6 +97,11 @@ function App() {
 
   function patchSettings(patch: Partial<Settings>): void {
     setSettings((current) => ({ ...current, ...patch }))
+  }
+
+  function openCalibration(): void {
+    setSettingsOpen(false)
+    setCalibrationOpen(true)
   }
 
   function openPrivacy(): void {
@@ -259,6 +266,7 @@ function App() {
         onStart={(source) => startPractice(overlay.song, source)}
         onPatchSettings={patchSettings}
         onOpenPrivacy={openPrivacy}
+        onOpenCalibration={openCalibration}
       />
     )
   } else if (overlay?.kind === 'practice') {
@@ -374,6 +382,11 @@ function App() {
             onSong={openSong}
             onOpenSettings={() => setSettingsOpen(true)}
             onOpenPrivacy={openPrivacy}
+            onGoTuner={() => {
+              setOverlay(null)
+              setTab('tuner')
+            }}
+            onGoCoach={() => openCoach()}
           />
         )}
         {tab === 'tuner' &&
@@ -445,6 +458,14 @@ function App() {
           onClearRecords={() => void clearAllRecords()}
           onLibraryCleared={() => setLibraryRevision((value) => value + 1)}
           onOpenPrivacy={openPrivacy}
+          onOpenCalibration={openCalibration}
+        />
+        <LatencyCalibrationDialog
+          open={calibrationOpen}
+          recordingAllowed={recordingAllowed}
+          settings={settings}
+          onClose={() => setCalibrationOpen(false)}
+          onSave={patchSettings}
         />
       </div>
       {privacyOpen && (

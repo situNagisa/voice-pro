@@ -1,13 +1,14 @@
 /** 应用共享的 IndexedDB：练习记录 + 歌曲库。版本升级时统一创建所有 store。 */
 
 export const DB_NAME = 'voicepro'
-export const DB_VERSION = 4
+export const DB_VERSION = 5
 
 export const RECORD_STORE = 'records'
 export const RECORD_DETAIL_STORE = 'details'
 export const SONG_STORE = 'songs'
 export const SONG_MELODY_STORE = 'songMelodies'
 export const SONG_AUDIO_STORE = 'songAudio'
+export const SONG_LYRICS_STORE = 'songLyrics'
 export const ANALYSIS_JOB_STORE = 'analysisJobs'
 
 let dbPromise: Promise<IDBDatabase> | null = null
@@ -37,6 +38,9 @@ export function openAppDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(SONG_AUDIO_STORE)) {
         db.createObjectStore(SONG_AUDIO_STORE, { keyPath: 'id' })
+      }
+      if (!db.objectStoreNames.contains(SONG_LYRICS_STORE)) {
+        db.createObjectStore(SONG_LYRICS_STORE, { keyPath: 'songId' })
       }
       if (!db.objectStoreNames.contains(ANALYSIS_JOB_STORE)) {
         const store = db.createObjectStore(ANALYSIS_JOB_STORE, { keyPath: 'id' })

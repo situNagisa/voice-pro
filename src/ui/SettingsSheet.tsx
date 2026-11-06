@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { MAX_LATENCY_MS, latestProfile, profileSummary } from '../audio/calibration'
 import {
   acknowledgeLibraryJob,
   clearLibrary,
@@ -8,11 +9,12 @@ import {
 } from '../library'
 import type { LibraryUsage } from '../library'
 import type { PrivacyChoice } from '../state/privacy'
-import type { Settings } from '../state/settings'
+import type { Settings, SeparationMode } from '../state/settings'
 import { Notice, Segmented, Slider, Stepper, Toggle } from './controls'
 import { CloseIcon } from './icons'
 
 interface SettingsSheetProps {
+  /** 打开延迟自动校准。 */
   open: boolean
   settings: Settings
   recordCount: number
@@ -23,6 +25,7 @@ interface SettingsSheetProps {
   onClearRecords: () => void
   onLibraryCleared: () => void
   onOpenPrivacy: () => void
+  onOpenCalibration: () => void
 }
 
 export function SettingsSheet({
@@ -36,8 +39,10 @@ export function SettingsSheet({
   onClearRecords,
   onLibraryCleared,
   onOpenPrivacy,
+  onOpenCalibration,
 }: SettingsSheetProps) {
   const [usage, setUsage] = useState<LibraryUsage | null>(null)
+  const lastCalibration = latestProfile(settings.latencyProfiles)
 
   useEffect(() => {
     if (!open) return
@@ -156,25 +161,64 @@ export function SettingsSheet({
               label="输入延迟补偿"
               value={settings.latencyMs ?? 60}
               min={0}
-              max={300}
+              max={MAX_LATENCY_MS}
               step={5}
               onChange={(value) => onPatch({ latencyMs: value })}
               format={() => (settings.latencyMs == null ? '自动' : `${settings.latencyMs} ms`)}
               hint={
                 settings.latencyMs == null
-                  ? '自动：开始练唱时按设备延迟估算。拖动后改为手动值。'
+                  ? (lastCalibration
+                      ? '自动：优先用当前输出设备的校准结果，没有匹配时按设备延迟估算。'
+                      : '自动：开始练唱时按设备延迟估算。建议校准一次，尤其是蓝牙耳机。')
                   : '手动值。曲线总比参考条块提前时，把数值调大。'
               }
             />
+            <div className="latency-calib-row">
+              <div>
+                <strong>{lastCalibration ? '已校准' : '还没校准'}</strong>
+                <span>
+                  {lastCalibration
+                    ? profileSummary(lastCalibration)
+                    : '外放或戴耳机测一次，约 20 秒，按输出设备分别保存。'}
+                </span>
+              </div>
+              <button type="button" className="btn small secondary" onClick={onOpenCalibration}>
+                {lastCalibration ? '重新校准' : '校准延迟'}
+              </button>
+            </div>
+            {Object.keys(settings.latencyProfiles).length > 0 && (
+              <button
+                type="button"
+                className="text-btn align-left"
+                onClick={() => onPatch({ latencyProfiles: {} })}
+              >
+                清除全部校准结果
+              </button>
+            )}
             {settings.latencyMs != null && (
               <button
                 type="button"
                 className="text-btn align-left"
                 onClick={() => onPatch({ latencyMs: null })}
               >
-                恢复自动估算
+                恢复自动补偿
               </button>
             )}
+          </section>
+
+          <section className="sheet-section">
+            <h3>导入与分析</h3>
+            <Segmented<SeparationMode>
+              label="人声分离"
+              value={settings.separationMode}
+              onChange={(value) => onPatch({ separationMode: value })}
+              options={[
+                { value: 'auto', label: '自动', sub: '手机快速' },
+                { value: 'fast', label: '快速', sub: '分段并行' },
+                { value: 'standard', label: '标准', sub: '省电' },
+              ]}
+              hint="自动：手机用快速、电脑用标准。快速模式把歌曲切成多段、用多个 Worker 并行分离，速度更快，但内存占用更高；两者提取出的旋律准确率相同。"
+            />
           </section>
 
           <section className="sheet-section">

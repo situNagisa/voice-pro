@@ -2,6 +2,8 @@ import { markSyntheticAudio } from '../core/audioFlags'
 import { DEMO_SONG_SPECS, songDurationSec } from './songs'
 import { renderSong, renderSongStems } from './synth'
 
+export { demoLyricSong } from './lyrics'
+
 /** 内置示例歌曲：本地合成（"人声"旋律 + 伴奏），让没有音频文件的用户也能马上体验。 */
 export interface DemoSong {
   id: string

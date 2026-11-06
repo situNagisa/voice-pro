@@ -6,11 +6,17 @@ import { formatCents, formatTime, midiToNoteName } from '../audio/pitch'
 import { readingAt, recordMelody, voiceOffsetAt } from '../audio/review'
 import type { ReadingAt } from '../audio/review'
 import { loadLibrarySong } from '../library'
+import {
+  lyricForPhrase,
+  shortLyric,
+  useRecordLyrics,
+} from '../lyrics'
 import { loadDemoSong } from '../state/demo'
 import type { PracticeRecord } from '../state/records'
 import type { LoadedSong, PracticeLoopTarget } from '../state/session'
 import { Notice, TopBar } from '../ui/controls'
 import { PauseIcon, PlayIcon, RefreshIcon, StopIcon } from '../ui/icons'
+import { LyricStrip } from '../ui/LyricStrip'
 import { PitchRoll } from '../ui/PitchRoll'
 import { useIsDesktop } from '../ui/useMediaQuery'
 
@@ -75,6 +81,7 @@ export function ReviewView({
     () => buildPhrases(melody.notes).slice().sort((a, b) => a.start - b.start),
     [melody],
   )
+  const lyrics = useRecordLyrics(record)
   const hitPercent = report.hitRate == null ? null : Math.round(report.hitRate * 100)
 
   const [song, setSong] = useState<LoadedSong | null>(initialSong)
@@ -322,16 +329,17 @@ export function ReviewView({
 
   function practicePhrase(phrase: { index: number; start: number; end: number }): void {
     if (!song) return
+    const phraseLyric = lyricForPhrase(lyrics, phrase)
     onPracticeLoop(
       song,
       [
         {
           start: phrase.start,
           end: phrase.end,
-          label: `第 ${phrase.index + 1} 句`,
+          label: phraseLyric ? shortLyric(phraseLyric, 18) : `第 ${phrase.index + 1} 句`,
         },
       ],
-      '单句循环',
+      phraseLyric ? `单句循环 · ${shortLyric(phraseLyric, 12)}` : '单句循环',
     )
   }
 
@@ -485,6 +493,12 @@ export function ReviewView({
             ariaLabel="回看音高卷帘"
             playheadLabel={playing ? '播放' : '回看'}
           />
+          <LyricStrip
+            lyrics={lyrics}
+            time={cursor ?? startAt}
+            label="歌词"
+            onSeek={(time) => jumpTo(time)}
+          />
           <div className="roll-legend">
             <span><i className="dot good" />准</span>
             <span><i className="dot sharp" />偏高 ↑</span>
@@ -579,14 +593,16 @@ export function ReviewView({
               {phrases.map((phrase) => {
                 const stat = phraseStats.get(phrase.index)
                 const rate = stat?.hitRate == null ? null : Math.round(stat.hitRate * 100)
+                const phraseLyric = lyricForPhrase(lyrics, phrase)
                 return (
                   <button
                     key={`${phrase.index}-${phrase.start}`}
                     type="button"
                     className={`phrase-chip ${rate == null ? 'none' : rate >= 75 ? 'good' : rate >= 50 ? 'warn' : 'bad'}`}
                     onClick={() => jumpTo(phrase.start)}
+                    title={phraseLyric ?? `第 ${phrase.index + 1} 句`}
                   >
-                    <strong>第 {phrase.index + 1} 句</strong>
+                    <strong>{phraseLyric ? shortLyric(phraseLyric, 20) : `第 ${phrase.index + 1} 句`}</strong>
                     <span>{formatTime(phrase.start)} · {rate == null ? '无数据' : `${rate}%`}</span>
                   </button>
                 )

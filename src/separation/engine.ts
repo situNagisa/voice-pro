@@ -1,5 +1,7 @@
 import * as ort from 'onnxruntime-web/webgpu';
 import { chunkTensorShape, separateChunked } from './chunking';
+import { ChunkSpectrogram } from './stft';
+import { fetchModelBuffer } from './model';
 
 export interface EngineOptions {
   modelUrl: string;
@@ -7,44 +9,6 @@ export interface EngineOptions {
   preferWebGPU: boolean;
   report: (stage: string, ratio: number) => void;
   onRuntime?: (runtime: 'webgpu' | 'wasm') => void;
-}
-
-async function fetchModel(
-  url: string,
-  report: EngineOptions['report'],
-): Promise<ArrayBuffer> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`加载人声分离模型失败（HTTP ${response.status}）`);
-  }
-  const total = Number(response.headers.get('content-length')) || 0;
-  if (!response.body) {
-    report('加载分离模型', 0.06);
-    return response.arrayBuffer();
-  }
-
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let loaded = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value) {
-      chunks.push(value);
-      loaded += value.byteLength;
-      if (total > 0) {
-        report('加载分离模型', Math.min(0.08, (0.08 * loaded) / total));
-      }
-    }
-  }
-
-  const data = new Uint8Array(loaded);
-  let offset = 0;
-  for (const chunk of chunks) {
-    data.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return data.buffer;
 }
 
 async function createSession(
@@ -93,7 +57,7 @@ export async function separateWithModel(
     throw new Error('音频为空，无法分离');
   }
 
-  const model = await fetchModel(options.modelUrl, options.report);
+  const model = await fetchModelBuffer(options.modelUrl, options.report);
   options.report('初始化分离模型', 0.09);
   const session = await createSession(model, options);
   options.report('分离人声', 0.1);
@@ -122,5 +86,49 @@ export async function separateWithModel(
   return {
     vocals,
     accompaniment: [accompanimentL, accompanimentR],
+  };
+}
+
+
+export interface ChunkSeparator {
+  runtime: 'webgpu' | 'wasm';
+  process(
+    left: Float32Array,
+    right: Float32Array,
+  ): Promise<[Float32Array, Float32Array]>;
+}
+
+/**
+ * 给快速模式的多 Worker 用：创建一个常驻会话和 STFT 工作区，
+ * 每次只接收一段 11.87 s 的 44.1 kHz 双声道 PCM，返回分离后的两个声道。
+ */
+export async function createChunkSeparator(
+  model: ArrayBuffer,
+  options: EngineOptions,
+): Promise<ChunkSeparator> {
+  let runtime: 'webgpu' | 'wasm' = 'wasm';
+  const session = await createSession(model, {
+    ...options,
+    onRuntime: (next) => {
+      runtime = next;
+      options.onRuntime?.(next);
+    },
+  });
+  const inputName = session.inputNames[0];
+  const outputName = session.outputNames[0];
+  const spectrogram = new ChunkSpectrogram();
+
+  return {
+    get runtime() {
+      return runtime;
+    },
+    async process(left, right) {
+      const input = spectrogram.stft(left, right);
+      const feeds: Record<string, ort.Tensor> = {};
+      feeds[inputName] = new ort.Tensor('float32', input, chunkTensorShape());
+      const result = await session.run(feeds);
+      const output = result[outputName].data as Float32Array;
+      return [spectrogram.istft(output, 0), spectrogram.istft(output, 1)];
+    },
   };
 }

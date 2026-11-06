@@ -8024,3 +8024,815 @@ input[type='range'] {
     height: 450px;
   }
 }
+
+/* ------------------------------------------------------------------
+   延迟校准与分离模式（v0.5）
+   ------------------------------------------------------------------- */
+
+.latency-calib-row,
+.prep-calib-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.028);
+}
+
+.latency-calib-row > div,
+.prep-calib-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.latency-calib-row strong,
+.prep-calib-row strong {
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.latency-calib-row span,
+.prep-calib-row span {
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.prep-calib-row {
+  margin: 2px 0 4px;
+}
+
+.prep-calib-row.is-ready {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+
+.prep-calib-row .btn,
+.latency-calib-row .btn {
+  flex: none;
+}
+
+.calib-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding:
+    max(18px, var(--safe-top))
+    16px
+    max(18px, var(--safe-bottom));
+  background: rgba(2, 3, 6, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  overflow-y: auto;
+}
+
+.calib-card {
+  width: min(520px, 100%);
+  max-height: calc(100svh - 36px);
+  overflow-y: auto;
+  padding: 22px 22px 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: 24px;
+  background:
+    radial-gradient(420px 260px at 85% -10%, rgba(143, 125, 255, 0.16), transparent 70%),
+    #101219;
+  box-shadow: 0 40px 100px -40px rgba(0, 0, 0, 0.95);
+  -webkit-overflow-scrolling: touch;
+}
+
+.calib-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.calib-card h1 {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 720;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+
+.calib-lead {
+  margin: 4px 0 16px;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.calib-card .field {
+  margin-top: 14px;
+}
+
+.calib-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.calib-actions .btn {
+  flex: 1;
+}
+
+.calib-note {
+  margin-top: 12px;
+  color: var(--text-3);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.calib-listening {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 4px 0 16px;
+  padding: 12px 13px;
+  border: 1px solid var(--accent-line);
+  border-radius: 14px;
+  background: var(--accent-soft);
+}
+
+.calib-listening svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  color: var(--accent-strong);
+}
+
+.calib-listening div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.calib-listening strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.calib-listening span {
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.calib-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background:
+    radial-gradient(340px 200px at 50% 0%, rgba(143, 125, 255, 0.16), transparent 70%),
+    rgba(255, 255, 255, 0.025);
+  text-align: center;
+}
+
+.calib-value {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--text);
+  font-size: 56px;
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.calib-value span {
+  color: var(--text-3);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.calib-result p {
+  max-width: 380px;
+  color: var(--text-2);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.calib-result p strong {
+  color: var(--accent-strong);
+}
+
+.calib-result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 12px;
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+@media (max-width: 560px) {
+  .calib-card {
+    padding: 18px 16px 16px;
+    border-radius: 20px;
+  }
+
+  .calib-card h1 {
+    font-size: 20px;
+  }
+
+  .calib-value {
+    font-size: 48px;
+  }
+
+  .latency-calib-row,
+  .prep-calib-row {
+    align-items: flex-start;
+  }
+}
+
+/* ---------------- 歌词：卷帘下方的当前句 / 下一句 ---------------- */
+
+.lyric-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 64px;
+  margin: 7px 2px 0;
+  padding: 8px 6px 5px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+}
+
+.lyric-strip.empty {
+  gap: 6px;
+  min-height: 0;
+  padding-bottom: 8px;
+}
+
+.lyric-strip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 20px;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.lyric-strip-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.lyric-strip-label svg {
+  width: 14px;
+  height: 14px;
+  color: var(--accent-strong);
+}
+
+.lyric-strip-label em {
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text-4);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.lyric-strip-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.lyric-strip-count {
+  color: var(--text-4);
+  font-variant-numeric: tabular-nums;
+}
+
+.lyric-import-btn {
+  min-height: 24px;
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lyric-import-btn:hover {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.lyric-empty-copy {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.lyric-current {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 0 4px;
+  overflow: hidden;
+}
+
+.lyric-current-tag {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.lyric-current-text {
+  min-width: 0;
+  color: var(--text);
+  font-size: clamp(17px, 2.2vw, 21px);
+  font-weight: 650;
+  line-height: 1.35;
+  letter-spacing: 0.015em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.lyric-current-text.upcoming {
+  color: var(--text-2);
+  font-weight: 550;
+}
+
+.lyric-word {
+  color: var(--text-4);
+  transition: color 0.08s linear;
+}
+
+.lyric-word.sung {
+  color: var(--text);
+}
+
+.lyric-word.active {
+  color: #ffd479;
+  text-shadow: 0 0 18px rgba(255, 212, 121, 0.35);
+}
+
+.lyric-sung {
+  color: var(--text);
+}
+
+.lyric-unsung {
+  color: var(--text-4);
+}
+
+.lyric-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent-deep), var(--accent-strong));
+  transition: width 0.1s linear;
+}
+
+.lyric-next {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-height: 18px;
+  padding: 0;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.lyric-next-tag {
+  flex: none;
+  color: var(--text-4);
+  font-size: 10px;
+}
+
+.lyric-next-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lyric-next-text.dim {
+  color: var(--text-4);
+}
+
+.lyric-line-button {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lyric-line-button:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.lyric-line-button:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 1px;
+  border-radius: 8px;
+}
+
+/* 练唱桌面紧凑布局里卷帘会压缩高度，歌词条保持单行高度不抢曲线空间 */
+@media (min-width: 1024px) {
+  .practice-page .lyric-strip {
+    min-height: 58px;
+    margin-top: 6px;
+    padding-top: 6px;
+  }
+
+  .practice-page .lyric-current-text {
+    font-size: 18px;
+  }
+}
+
+/* ---------------- 歌词导入 / 对时弹窗 ---------------- */
+
+.lyrics-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.lyrics-sheet {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: 94svh;
+  border-top: 1px solid var(--line-strong);
+  border-radius: 22px 22px 0 0;
+  background:
+    radial-gradient(520px 300px at 80% 0%, rgba(143, 125, 255, 0.13), transparent 72%),
+    #0e1016;
+  box-shadow: 0 -30px 100px -40px rgba(0, 0, 0, 0.95);
+  animation: lyrics-up 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes lyrics-up {
+  from {
+    transform: translateY(32px);
+    opacity: 0.55;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.lyrics-head {
+  padding:
+    calc(var(--safe-top) + 16px)
+    16px
+    12px;
+}
+
+.lyrics-head h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lyrics-head .tiny-note {
+  max-width: 58ch;
+  margin-top: 4px;
+}
+
+.lyrics-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  padding: 14px 16px 18px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.lyrics-import,
+.lyrics-preview,
+.lyrics-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.lyrics-import-top,
+.lyrics-import-actions,
+.lyrics-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.lyrics-import-top .tiny-note {
+  flex: 1;
+  min-width: 150px;
+}
+
+.lyrics-textarea {
+  width: 100%;
+  min-height: 88px;
+  max-height: 220px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(5, 7, 11, 0.62);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.65;
+  resize: vertical;
+}
+
+.lyrics-textarea::placeholder {
+  color: var(--text-4);
+}
+
+.lyrics-textarea:focus {
+  border-color: var(--accent-line);
+  outline: none;
+}
+
+.lyrics-import-actions {
+  justify-content: space-between;
+}
+
+.lyrics-preview {
+  gap: 9px;
+}
+
+.lyrics-scrubber {
+  flex: 1;
+  min-width: 120px;
+  accent-color: var(--accent);
+}
+
+.lyrics-clock {
+  flex: none;
+  color: var(--text-3);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lyrics-editor {
+  min-height: 0;
+}
+
+.lyrics-editor-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.lyrics-edit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 42svh;
+  margin: 0;
+  padding: 0 2px 0 0;
+  overflow-y: auto;
+  list-style: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.lyrics-edit-line {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.022);
+}
+
+.lyrics-edit-line.is-selected {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+
+.lyrics-edit-line.is-current:not(.is-selected) {
+  background: rgba(255, 212, 121, 0.07);
+}
+
+.lyrics-line-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lyrics-line-time {
+  flex: none;
+  color: var(--text-3);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lyrics-line-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.lyrics-line-badge {
+  flex: none;
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text-4);
+  font-size: 9.5px;
+  font-style: normal;
+}
+
+.lyrics-line-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 0 9px 9px;
+}
+
+.lyrics-line-controls input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.lyrics-line-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.lyrics-line-actions .tiny-note {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.lyrics-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px calc(var(--safe-bottom) + 14px);
+  border-top: 1px solid var(--line);
+}
+
+.lyrics-foot > .tiny-note {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lyrics-foot-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+@media (min-width: 720px) {
+  .lyrics-layer {
+    align-items: center;
+    padding: 24px;
+  }
+
+  .lyrics-sheet {
+    width: min(880px, 94vw);
+    max-height: min(88svh, 880px);
+    border: 1px solid var(--line-strong);
+    border-radius: 22px;
+    box-shadow: 0 50px 120px -40px rgba(0, 0, 0, 0.95);
+    animation: dialog-in 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .lyrics-head {
+    padding: 20px 22px 14px;
+  }
+
+  .lyrics-body {
+    display: grid;
+    grid-template-columns: minmax(280px, 0.9fr) minmax(320px, 1.1fr);
+    grid-template-areas:
+      'import preview'
+      'import editor';
+    align-items: start;
+    padding: 16px 22px 18px;
+  }
+
+  .lyrics-import {
+    grid-area: import;
+    position: sticky;
+    top: 0;
+  }
+
+  .lyrics-preview {
+    grid-area: preview;
+  }
+
+  .lyrics-editor {
+    grid-area: editor;
+  }
+
+  .lyrics-edit-list {
+    max-height: 34svh;
+  }
+
+  .lyrics-foot {
+    padding: 12px 22px 16px;
+  }
+}
+
+@media (max-width: 420px) {
+  .lyrics-foot {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .lyrics-foot-actions {
+    justify-content: flex-end;
+  }
+
+  .lyrics-current-text {
+    font-size: 16.5px;
+  }
+}
+
+/* 歌词较长时报告里的句子标题可换行，评分数字仍靠右 */
+.phrase-title {
+  min-width: 0;
+  flex-wrap: wrap;
+  line-height: 1.4;
+}
+
+.phrase-chip strong {
+  overflow-wrap: anywhere;
+}
+
+/* 手机单句循环：有歌词时给歌词条腾出高度，避免被底部控制条盖住 */
+@media (max-width: 719px) {
+  .loop-page .roll-card.has-lyrics .pitch-roll {
+    height: 182px;
+  }
+}
+
+@media (min-width: 720px) and (max-width: 1023px) {
+  .loop-page .roll-card.has-lyrics .pitch-roll {
+    height: 240px;
+  }
+}

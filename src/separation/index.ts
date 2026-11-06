@@ -1,4 +1,6 @@
 import type { SeparateRequest, SeparateResponse } from './protocol';
+import { fetchModelBuffer } from './model';
+import { separateQuick } from './quick';
 import { MODEL_RATE } from './stft';
 
 export interface SeparationResult {
@@ -155,10 +157,18 @@ function createAudioBuffer(
  * 输入可以是任意采样率/声道数，内部统一到 44.1 kHz 双声道推理，
  * 输出保持输入的采样率和时长；单声道输入输出单声道。
  */
+export type SeparationSpeed = 'standard' | 'fast'
+
+export interface SeparateOptions {
+  /** 快速模式：分段并行 + 0.5 s 重叠；默认标准模式。 */
+  speed?: SeparationSpeed
+}
+
 export async function separateVocals(
   audio: AudioBuffer,
   onProgress?: SeparationProgress,
   signal?: AbortSignal,
+  options: SeparateOptions = {},
 ): Promise<SeparationResult> {
   throwIfAborted(signal);
   if (audio.numberOfChannels === 0 || audio.length === 0) {
@@ -174,6 +184,86 @@ export async function separateVocals(
   );
   throwIfAborted(signal);
 
+  const base = import.meta.env.BASE_URL || '/';
+  const modelUrl = new URL(`${base}${MODEL_PATH}`, window.location.href).href;
+  const preferWebGPU =
+    typeof navigator !== 'undefined' && Boolean(navigator.gpu);
+
+  let separated: { vocals: Float32Array[]; accompaniment: Float32Array[] };
+  if (options.speed === 'fast') {
+    try {
+      const model = await fetchModelBuffer(modelUrl, (stage, ratio) =>
+        reportSafely(onProgress, stage, Math.min(0.1, ratio)),
+      );
+      throwIfAborted(signal);
+      separated = await separateQuick(resampled, {
+        model,
+        preferWebGPU,
+        workerCount: quickWorkerCount(),
+        onProgress: (stage, ratio) =>
+          reportSafely(onProgress, stage, 0.1 + 0.86 * ratio),
+        signal,
+      });
+    } catch (error) {
+      if (signal?.aborted || isAbortError(error)) throw abortError();
+      console.warn('[voice-pro] 快速分离失败，回退到标准模式', error);
+      reportSafely(onProgress, '快速模式不可用，改用标准分离', 0.02);
+      separated = await runStandardSeparation(
+        resampled,
+        modelUrl,
+        preferWebGPU,
+        onProgress,
+        signal,
+      );
+    }
+  } else {
+    separated = await runStandardSeparation(
+      resampled,
+      modelUrl,
+      preferWebGPU,
+      onProgress,
+      signal,
+    );
+  }
+
+  throwIfAborted(signal);
+  reportSafely(onProgress, '整理分离结果', 0.99);
+
+  const mono = audio.numberOfChannels === 1;
+  let vocalsChannels = separated.vocals;
+  let accompanimentChannels = separated.accompaniment;
+  if (mono) {
+    const mix = (channels: Float32Array[]): Float32Array => {
+      const out = new Float32Array(channels[0].length);
+      for (let i = 0; i < out.length; i++) {
+        out[i] = (channels[0][i] + channels[1][i]) * 0.5;
+      }
+      return out;
+    };
+    vocalsChannels = [mix(separated.vocals)];
+    accompanimentChannels = [mix(separated.accompaniment)];
+  }
+
+  const [vocalsData, accompanimentData] = await Promise.all([
+    resampleChannels(vocalsChannels, MODEL_RATE, audio.sampleRate),
+    resampleChannels(accompanimentChannels, MODEL_RATE, audio.sampleRate),
+  ]);
+  throwIfAborted(signal);
+  const vocals = createAudioBuffer(vocalsData, audio.sampleRate);
+  const accompaniment = createAudioBuffer(accompanimentData, audio.sampleRate);
+  reportSafely(onProgress, '人声分离完成', 1);
+
+  return { vocals, accompaniment };
+}
+
+function runStandardSeparation(
+  channels: Float32Array[],
+  modelUrl: string,
+  preferWebGPU: boolean,
+  onProgress: SeparationProgress | undefined,
+  signal: AbortSignal | undefined,
+): Promise<{ vocals: Float32Array[]; accompaniment: Float32Array[] }> {
+  throwIfAborted(signal);
   const worker = new Worker(new URL('./worker.ts', import.meta.url), {
     type: 'module',
   });
@@ -182,12 +272,7 @@ export async function separateVocals(
     throw abortError();
   }
 
-  const base = import.meta.env.BASE_URL || '/';
-  const modelUrl = new URL(`${base}${MODEL_PATH}`, window.location.href).href;
-  const preferWebGPU =
-    typeof navigator !== 'undefined' && Boolean(navigator.gpu);
-
-  const separated = await new Promise<{
+  return new Promise<{
     vocals: Float32Array[];
     accompaniment: Float32Array[];
   }>((resolve, reject) => {
@@ -225,7 +310,9 @@ export async function separateVocals(
         });
         return;
       }
-      fail(new Error(message.message || '人声分离失败'));
+      if (message.type === 'error') {
+        fail(new Error(message.message || '人声分离失败'));
+      }
     };
     worker.onerror = (event: ErrorEvent) => {
       fail(new Error(event.message || '人声分离 Worker 出错'));
@@ -242,46 +329,32 @@ export async function separateVocals(
 
     const request: SeparateRequest = {
       type: 'separate',
-      channels: resampled,
+      channels,
       modelUrl,
       preferWebGPU,
     };
     try {
       worker.postMessage(
         request,
-        resampled.map((channel) => channel.buffer as ArrayBuffer),
+        channels.map((channel) => channel.buffer as ArrayBuffer),
       );
     } catch (error) {
       fail(error);
     }
   });
+}
 
-  throwIfAborted(signal);
-  reportSafely(onProgress, '整理分离结果', 0.99);
+/** 手机内存有限：6 GB 以上开 2 路，4 GB 级只开 1 路；桌面最多 3 路。 */
+function quickWorkerCount(): number {
+  const cores = navigator.hardwareConcurrency || 4;
+  const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  // 手机内存有限；拿不到 deviceMemory 时按 2 路试，失败会自动回退标准模式。
+  const mobileCap = memory == null ? 2 : memory >= 6 ? 2 : 1;
+  const cap = mobile ? mobileCap : 3;
+  return Math.max(1, Math.min(cap, Math.max(1, cores - 1)));
+}
 
-  const mono = audio.numberOfChannels === 1;
-  let vocalsChannels = separated.vocals;
-  let accompanimentChannels = separated.accompaniment;
-  if (mono) {
-    const mix = (channels: Float32Array[]): Float32Array => {
-      const out = new Float32Array(channels[0].length);
-      for (let i = 0; i < out.length; i++) {
-        out[i] = (channels[0][i] + channels[1][i]) * 0.5;
-      }
-      return out;
-    };
-    vocalsChannels = [mix(separated.vocals)];
-    accompanimentChannels = [mix(separated.accompaniment)];
-  }
-
-  const [vocalsData, accompanimentData] = await Promise.all([
-    resampleChannels(vocalsChannels, MODEL_RATE, audio.sampleRate),
-    resampleChannels(accompanimentChannels, MODEL_RATE, audio.sampleRate),
-  ]);
-  throwIfAborted(signal);
-  const vocals = createAudioBuffer(vocalsData, audio.sampleRate);
-  const accompaniment = createAudioBuffer(accompanimentData, audio.sampleRate);
-  reportSafely(onProgress, '人声分离完成', 1);
-
-  return { vocals, accompaniment };
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
 }

@@ -211,6 +211,16 @@ export function ShareIcon(props: IconProps) {
   )
 }
 
+export function LyricsIcon(props: IconProps) {
+  return base(
+    props,
+    <>
+      <rect x="4" y="3.5" width="16" height="17" rx="2.4" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M8 8h8M8 12h8M8 16h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </>,
+  )
+}
+
 export function DownloadIcon(props: IconProps) {
   return base(
     props,

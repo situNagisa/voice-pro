@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { resolveLatencyMs } from '../audio/calibration'
 import { evalPass } from '../audio/loopScore'
 import type { PassResult } from '../audio/loopScore'
 import { mediaErrorMessage, PitchCapture } from '../audio/capture'
@@ -11,6 +12,7 @@ import type { Note, ReferenceMelody } from '../core/types'
 import type { LoopRange } from '../audio/player'
 import type { LoadedSong, PracticeLoopTarget } from '../state/session'
 import type { Settings } from '../state/settings'
+import { useSongLyrics } from '../lyrics'
 import { Segmented, TopBar } from '../ui/controls'
 import {
   HeadphonesIcon,
@@ -19,6 +21,7 @@ import {
   RefreshIcon,
   StopIcon,
 } from '../ui/icons'
+import { LyricStrip } from '../ui/LyricStrip'
 import { PitchRoll } from '../ui/PitchRoll'
 
 interface LoopPracticeProps {
@@ -179,6 +182,7 @@ export function LoopPracticeView({
   const [history, setHistory] = useState<PassResult[]>([])
   const [lastResult, setLastResult] = useState<PassResult | null>(null)
   const [range, setRange] = useState<RangePrepared | null>(null)
+  const { lyrics } = useSongLyrics(song)
 
   const playerRef = useRef<LoopPlayer | null>(null)
   const captureRef = useRef<PitchCapture | null>(null)
@@ -227,6 +231,13 @@ export function LoopPracticeView({
   const displayTarget = current?.targetMidi != null ? midiToNoteName(current.targetMidi) : null
 
   const rangeMelody = range?.melody ?? null
+  const lyricProgress =
+    scoreEnd > scoreStart
+      ? Math.min(1, Math.max(0, (now - scoreStart) / (scoreEnd - scoreStart)))
+      : 0
+  const lyricTime = currentTarget
+    ? currentTarget.start + lyricProgress * Math.max(0, currentTarget.end - currentTarget.start)
+    : 0
 
   useEffect(() => {
     mountedRef.current = true
@@ -289,7 +300,7 @@ export function LoopPracticeView({
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.repeat) return
-      if (document.querySelector('.settings-sheet')) return
+      if (document.querySelector('.settings-sheet, .lyrics-layer')) return
       const target = event.target as HTMLElement | null
       if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
       if (event.code === 'Space') {
@@ -492,8 +503,12 @@ export function LoopPracticeView({
         return
       }
       captureRef.current = capture
-      latencyRef.current =
-        settingsRef.current.latencyMs ?? Math.max(0, Math.round(capture.latencyMs))
+      latencyRef.current = await resolveLatencyMs(
+        settingsRef.current.latencyMs,
+        settingsRef.current.latencyProfiles,
+        settingsRef.current.lastOutputKind,
+        Math.max(0, Math.round(capture.latencyMs)),
+      )
 
       setPhase('preparing')
       setStatusText('正在准备这一句…')
@@ -818,7 +833,7 @@ export function LoopPracticeView({
             </div>
           </section>
 
-          <section className="roll-card card">
+          <section className={`roll-card card ${lyrics ? 'has-lyrics' : ''}`}>
             <PitchRoll
               melody={rangeMelody}
               pointsRef={pointsRef}
@@ -836,6 +851,7 @@ export function LoopPracticeView({
               ariaLabel="单句循环的音高卷帘"
               playheadLabel={phase === 'paused' ? '暂停' : preroll ? '预备' : '这一遍'}
             />
+            <LyricStrip lyrics={lyrics} time={lyricTime} label="本句歌词" />
             <div className="roll-legend">
               <span><i className="dot good" />准</span>
               <span><i className="dot sharp" />偏高 ↑</span>
