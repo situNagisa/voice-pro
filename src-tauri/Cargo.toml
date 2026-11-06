@@ -1,0 +1,18 @@
+[package]
+name = "voice-pro"
+version = "0.3.0"
+description = "音准镜：本地音高对比练唱"
+authors = ["Voice Pro"]
+edition = "2021"
+rust-version = "1.77.2"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1

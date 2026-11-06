@@ -2,9 +2,13 @@ import basicSsl from '@vitejs/plugin-basic-ssl'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
+// Tauri 开发窗口对自签名证书不友好，桌面端开发时走 http://localhost（同样算安全上下文）；
+// 浏览器开发仍用 HTTPS，方便手机在同一局域网测试麦克风。
+const isTauri = Boolean(process.env.TAURI_ENV_PLATFORM)
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), basicSsl()],
+  plugins: [react(), ...(isTauri ? [] : [basicSsl()])],
   // onnxruntime-web 自带 wasm 加载器，交给 Vite 预打包会破坏 wasm 路径。
   optimizeDeps: {
     exclude: ['onnxruntime-web'],
