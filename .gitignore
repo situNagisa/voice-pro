@@ -7,6 +7,11 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Android 上传密钥（实际文件放在 ~/.voicepro/，任何情况下都不入库）
+*.jks
+*.keystore
+keystore.properties
+
 node_modules
 dist
 dist-ssr
