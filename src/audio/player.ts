@@ -99,6 +99,14 @@ export class SongPlayer {
     if (!this.tracks[this.mode]) this.mode = 'original'
   }
 
+  /** 替换单条音轨（例如变调处理后的副本），时长必须与原曲一致。 */
+  setTrack(track: SongTrack, buffer: AudioBuffer): void {
+    this.tracks[track] = buffer
+    if (this.mode === track && this.playing) {
+      this.play(this.position, this.loopRange)
+    }
+  }
+
   /** 切到已有音轨；播放中会在当前位置无缝重开一个 source。 */
   setMode(mode: SongTrack): void {
     if (!this.tracks[mode] || this.mode === mode) return

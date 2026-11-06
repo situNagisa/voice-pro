@@ -7,13 +7,17 @@ import {
   listRecords,
   loadRecord,
 } from './state/records'
-import type { LoadedSong } from './state/session'
+import type { LoadedSong, PracticeLoopTarget } from './state/session'
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from './state/settings'
 import type { Settings } from './state/settings'
+import { loadPrivacyChoice, savePrivacyChoice } from './state/privacy'
+import type { PrivacyChoice } from './state/privacy'
 import { BottomNav } from './ui/BottomNav'
 import type { TabKey } from './ui/BottomNav'
+import { PrivacyDialog } from './ui/PrivacyDialog'
 import { SettingsSheet } from './ui/SettingsSheet'
 import { SideNav } from './ui/SideNav'
+import { LoopPracticeView } from './views/LoopPractice'
 import { PrepView } from './views/PrepView'
 import { PracticeView } from './views/Practice'
 import type { PracticeResult } from './views/Practice'
@@ -35,6 +39,13 @@ type Overlay =
       startAt: number
       returnTo: Overlay | null
     }
+  | {
+      kind: 'loop'
+      song: LoadedSong
+      targets: PracticeLoopTarget[]
+      label: string
+      returnTo: Overlay | null
+    }
 
 function App() {
   const [tab, setTab] = useState<TabKey>('songs')
@@ -45,6 +56,11 @@ function App() {
   const [recordsLoading, setRecordsLoading] = useState(true)
   const [openingRecord, setOpeningRecord] = useState(false)
   const [libraryRevision, setLibraryRevision] = useState(0)
+  const [privacyChoice, setPrivacyChoice] = useState<PrivacyChoice | null>(() =>
+    loadPrivacyChoice(),
+  )
+  const [privacyOpen, setPrivacyOpen] = useState(() => loadPrivacyChoice() == null)
+  const recordingAllowed = privacyChoice === 'accepted'
 
   async function refreshRecords(): Promise<void> {
     setRecordsLoading(true)
@@ -70,12 +86,50 @@ function App() {
     setSettings((current) => ({ ...current, ...patch }))
   }
 
+  function openPrivacy(): void {
+    setSettingsOpen(false)
+    setPrivacyOpen(true)
+  }
+
+  function acceptPrivacy(): void {
+    savePrivacyChoice('accepted')
+    setPrivacyChoice('accepted')
+    setPrivacyOpen(false)
+  }
+
+  function declinePrivacy(): void {
+    savePrivacyChoice('declined')
+    setPrivacyChoice('declined')
+    setPrivacyOpen(false)
+  }
+
   function openSong(song: LoadedSong): void {
     setOverlay({ kind: 'prep', song })
   }
 
   function startPractice(song: LoadedSong, source: InputSource): void {
+    if (!recordingAllowed) {
+      setPrivacyOpen(true)
+      return
+    }
     setOverlay({ kind: 'practice', song, source })
+  }
+
+  function openLoopPractice(
+    song: LoadedSong,
+    targets: PracticeLoopTarget[],
+    label: string,
+    returnTo: Overlay | null,
+    transpose?: number,
+  ): void {
+    if (!recordingAllowed) {
+      setPrivacyOpen(true)
+      return
+    }
+    if (transpose != null && transpose !== settings.transpose) {
+      patchSettings({ transpose })
+    }
+    setOverlay({ kind: 'loop', song, targets, label, returnTo })
   }
 
   function finishPractice(result: PracticeResult): void {
@@ -152,7 +206,13 @@ function App() {
   useEffect(() => {
     // Esc 返回：练唱与回看页各自处理（需要先确认/停止播放），这里管准备页与报告页。
     if (!overlay || settingsOpen) return
-    if (overlay.kind === 'practice' || overlay.kind === 'review') return
+    if (
+      overlay.kind === 'practice' ||
+      overlay.kind === 'review' ||
+      overlay.kind === 'loop'
+    ) {
+      return
+    }
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       const target = event.target as HTMLElement | null
@@ -171,8 +231,11 @@ function App() {
       <PrepView
         song={overlay.song}
         settings={settings}
+        recordingAllowed={recordingAllowed}
         onBack={backToTabs}
         onStart={(source) => startPractice(overlay.song, source)}
+        onPatchSettings={patchSettings}
+        onOpenPrivacy={openPrivacy}
       />
     )
   } else if (overlay?.kind === 'practice') {
@@ -196,6 +259,15 @@ function App() {
         onBack={backToTabs}
         onReview={(startAt) => openReviewFromReport(overlay.result, startAt)}
         onRestart={() => setOverlay({ kind: 'prep', song: overlay.result.song })}
+        onPracticeLoop={(targets, label) =>
+          openLoopPractice(
+            overlay.result.song,
+            targets,
+            label,
+            { kind: 'report', result: overlay.result },
+            overlay.result.record.transpose,
+          )
+        }
       />
     )
   } else if (overlay?.kind === 'review') {
@@ -205,6 +277,31 @@ function App() {
         record={overlay.record}
         initialSong={overlay.song}
         startAt={overlay.startAt}
+        onBack={() => setOverlay(overlay.returnTo)}
+        onPracticeLoop={(song, targets, label) =>
+          openLoopPractice(
+            song,
+            targets,
+            label,
+            {
+              ...overlay,
+              song,
+              startAt: targets[0]?.start ?? overlay.startAt,
+            },
+            overlay.record.transpose,
+          )
+        }
+      />
+    )
+  } else if (overlay?.kind === 'loop') {
+    content = (
+      <LoopPracticeView
+        key={`${overlay.song.id}-${overlay.targets.map((target) => target.start).join('-')}`}
+        song={overlay.song}
+        targets={overlay.targets}
+        label={overlay.label}
+        settings={settings}
+        onPatchSettings={patchSettings}
         onBack={() => setOverlay(overlay.returnTo)}
       />
     )
@@ -216,13 +313,38 @@ function App() {
             settings={settings}
             records={records}
             libraryRevision={libraryRevision}
+            recordingAllowed={recordingAllowed}
             onSong={openSong}
             onOpenSettings={() => setSettingsOpen(true)}
+            onOpenPrivacy={openPrivacy}
           />
         )}
-        {tab === 'tuner' && (
-          <TunerView onOpenSettings={() => setSettingsOpen(true)} />
-        )}
+        {tab === 'tuner' &&
+          (recordingAllowed ? (
+            <TunerView onOpenSettings={() => setSettingsOpen(true)} />
+          ) : (
+            <div className="screen tuner-screen">
+              <header className="tab-header">
+                <div>
+                  <p className="eyebrow">实时监听</p>
+                  <h1 className="tab-title">音准仪</h1>
+                </div>
+              </header>
+              <main className="page">
+                <section className="card empty-card">
+                  <h1>音准仪需要麦克风</h1>
+                  <p>
+                    你目前选择了仅浏览模式，麦克风与录音不会启用。同意隐私说明后即可使用实时音准仪。
+                  </p>
+                  <div className="row-actions">
+                    <button type="button" className="btn primary" onClick={openPrivacy}>
+                      查看隐私说明并同意
+                    </button>
+                  </div>
+                </section>
+              </main>
+            </div>
+          ))}
         {tab === 'records' && (
           <RecordsView
             records={records}
@@ -239,28 +361,39 @@ function App() {
   }
 
   return (
-    <div className={`app-shell ${overlay ? 'has-overlay' : ''}`}>
-      <SideNav active={tab} onNavigate={navigate} onOpenSettings={() => setSettingsOpen(true)} />
-      <div className="app-main">
-        {content}
-        {openingRecord && (
-          <div className="boot-overlay">
-            <div className="spinner large" />
-            <span>正在读取记录…</span>
-          </div>
-        )}
+    <>
+      <div className={`app-shell ${overlay ? 'has-overlay' : ''}`}>
+        <SideNav active={tab} onNavigate={navigate} onOpenSettings={() => setSettingsOpen(true)} />
+        <div className="app-main">
+          {content}
+          {openingRecord && (
+            <div className="boot-overlay">
+              <div className="spinner large" />
+              <span>正在读取记录…</span>
+            </div>
+          )}
+        </div>
+        <SettingsSheet
+          open={settingsOpen}
+          settings={settings}
+          recordCount={records.length}
+          privacyChoice={privacyChoice}
+          onClose={() => setSettingsOpen(false)}
+          onPatch={patchSettings}
+          onReset={() => setSettings({ ...DEFAULT_SETTINGS })}
+          onClearRecords={() => void clearAllRecords()}
+          onLibraryCleared={() => setLibraryRevision((value) => value + 1)}
+          onOpenPrivacy={openPrivacy}
+        />
       </div>
-      <SettingsSheet
-        open={settingsOpen}
-        settings={settings}
-        recordCount={records.length}
-        onClose={() => setSettingsOpen(false)}
-        onPatch={patchSettings}
-        onReset={() => setSettings({ ...DEFAULT_SETTINGS })}
-        onClearRecords={() => void clearAllRecords()}
-        onLibraryCleared={() => setLibraryRevision((value) => value + 1)}
-      />
-    </div>
+      {privacyOpen && (
+        <PrivacyDialog
+          choice={privacyChoice}
+          onAccept={acceptPrivacy}
+          onDecline={declinePrivacy}
+        />
+      )}
+    </>
   )
 }
 

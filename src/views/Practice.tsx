@@ -12,6 +12,7 @@ import type { RawUserPoint } from '../audio/analysis'
 import { formatCents, formatTime, midiToNoteName } from '../audio/pitch'
 import { SongPlayer } from '../audio/player'
 import type { LoopRange, SongTrack } from '../audio/player'
+import { processBuffer } from '../audio/transform'
 import type { PracticeRecord } from '../state/records'
 import { saveRecord } from '../state/records'
 import type { LoadedSong } from '../state/session'
@@ -101,6 +102,9 @@ export function PracticeView({
   const [playbackMode, setPlaybackMode] = useState<SongTrack>(
     song.accompaniment ? 'accompaniment' : 'original',
   )
+  const [sessionTranspose, setSessionTranspose] = useState(settings.transpose)
+  const [trackBusy, setTrackBusy] = useState<SongTrack | null>(null)
+  const [replayBusy, setReplayBusy] = useState(false)
 
   const playerRef = useRef<SongPlayer | null>(null)
   const captureRef = useRef<PitchCapture | null>(null)
@@ -120,9 +124,13 @@ export function PracticeView({
   const currentRef = useRef<CurrentReading | null>(null)
   const latencyRef = useRef(60)
   const playbackModeRef = useRef(playbackMode)
+  const sessionTransposeRef = useRef(sessionTranspose)
+  const trackBusyRef = useRef<SongTrack | null>(null)
 
   settingsRef.current = settings
   playbackModeRef.current = playbackMode
+  sessionTransposeRef.current = sessionTranspose
+  trackBusyRef.current = trackBusy
 
   const hasAccompaniment = song.accompaniment != null
   const hasVocals = song.vocals != null
@@ -185,6 +193,25 @@ export function PracticeView({
     }
   }
 
+  function trackBuffer(track: SongTrack): AudioBuffer | null {
+    if (track === 'accompaniment') return song.accompaniment ?? null
+    if (track === 'vocals') return song.vocals ?? null
+    return song.buffer
+  }
+
+  async function ensureTransposedTrack(
+    player: SongPlayer,
+    track: SongTrack,
+    transpose: number,
+  ): Promise<void> {
+    if (transpose === 0) return
+    const source = trackBuffer(track)
+    if (!source) return
+    const processed = await processBuffer(source, { semitones: transpose })
+    if (!mountedRef.current || finishingRef.current) return
+    player.setTrack(track, processed)
+  }
+
   async function startSession(): Promise<void> {
     if (!mountedRef.current || finishingRef.current) return
     setPhase('starting')
@@ -193,6 +220,9 @@ export function PracticeView({
     let player: SongPlayer | null = null
     let capture: PitchCapture | null = null
     try {
+      const transpose = settingsRef.current.transpose
+      sessionTransposeRef.current = transpose
+      setSessionTranspose(transpose)
       player = new SongPlayer(song.buffer, {
         accompaniment: song.accompaniment ?? null,
         vocals: song.vocals ?? null,
@@ -210,6 +240,16 @@ export function PracticeView({
       if (!mountedRef.current) {
         player.dispose()
         return
+      }
+
+      if (transpose !== 0) {
+        setStatusText('正在准备变调伴奏…')
+        await ensureTransposedTrack(player, availableMode, transpose)
+        if (!mountedRef.current) {
+          player.dispose()
+          return
+        }
+        setStatusText('变调伴奏已就绪')
       }
 
       setStatusText('正在校准输入…')
@@ -234,7 +274,7 @@ export function PracticeView({
           pointsRef.current.push({ t, f0: frame.f0, midi: frame.midi, clarity: frame.clarity })
           if (performance.now() - lastUiRef.current >= 40) {
             lastUiRef.current = performance.now()
-            const target = referenceMidiAt(song.melody, t, settingsRef.current.transpose)
+            const target = referenceMidiAt(song.melody, t, sessionTransposeRef.current)
             const comparison =
               target == null
                 ? null
@@ -332,7 +372,30 @@ export function PracticeView({
     setReplayPlaying(false)
   }
 
-  function changePlaybackMode(mode: SongTrack): void {
+  async function changePlaybackMode(mode: SongTrack): Promise<void> {
+    if (trackBusyRef.current != null) return
+    const player = playerRef.current
+    const transpose = sessionTransposeRef.current
+    if (player && transpose !== 0 && mode !== playbackModeRef.current) {
+      const source = trackBuffer(mode)
+      if (!source) return
+      setTrackBusy(mode)
+      trackBusyRef.current = mode
+      setStatusText('正在准备变调音轨…')
+      try {
+        await ensureTransposedTrack(player, mode, transpose)
+      } catch (err) {
+        console.warn('[voice-pro] 音轨变调失败', err)
+        setError('这条音轨变调失败，请重试或换回原调。')
+        setTrackBusy(null)
+        trackBusyRef.current = null
+        return
+      }
+      setTrackBusy(null)
+      trackBusyRef.current = null
+      if (!mountedRef.current || finishingRef.current) return
+      if (phase === 'active') setStatusText('录音与实时检测')
+    }
     setPlaybackMode(mode)
     playbackModeRef.current = mode
     playerRef.current?.setMode(mode)
@@ -408,7 +471,7 @@ export function PracticeView({
 
   async function playReplay(): Promise<void> {
     const player = playerRef.current
-    if (!player) return
+    if (!player || replayBusy) return
     if (replayPlaying) {
       stopReplay()
       return
@@ -428,7 +491,7 @@ export function PracticeView({
       setCursor(from)
       setSelected(
         readingAt(pointsRef.current, from, song.melody, {
-          transpose: settingsRef.current.transpose,
+          transpose: sessionTransposeRef.current,
           octaveAlign: settingsRef.current.octaveAlign,
           tolerance: settingsRef.current.tolerance,
         }),
@@ -441,17 +504,47 @@ export function PracticeView({
     clip.onEnded = () => {
       if (mountedRef.current) setReplayPlaying(false)
     }
+
+    let original = song.buffer
+    let accompaniment = song.accompaniment ?? null
+    let vocals = song.vocals ?? null
+    const transpose = sessionTransposeRef.current
+    if (transpose !== 0) {
+      setReplayBusy(true)
+      try {
+        if (replayMode === 'original') {
+          original = await processBuffer(original, { semitones: transpose })
+        } else if (replayMode === 'accompaniment' && accompaniment) {
+          accompaniment = await processBuffer(accompaniment, { semitones: transpose })
+        } else if (replayMode === 'vocals' && vocals) {
+          vocals = await processBuffer(vocals, { semitones: transpose })
+        } else if (replayMode === 'mix') {
+          if (accompaniment) {
+            accompaniment = await processBuffer(accompaniment, { semitones: transpose })
+          } else {
+            original = await processBuffer(original, { semitones: transpose })
+          }
+        }
+      } catch (err) {
+        console.warn('[voice-pro] 回放变调失败', err)
+        if (mountedRef.current) setError('回放变调失败，暂时按原调播放。')
+      } finally {
+        if (mountedRef.current) setReplayBusy(false)
+      }
+      if (!mountedRef.current || finishingRef.current) return
+    }
+
     await clip.play({
-      original: song.buffer,
-      accompaniment: song.accompaniment ?? null,
-      vocals: song.vocals ?? null,
+      original,
+      accompaniment,
+      vocals,
       voice: voiceBufferRef.current,
       songTime: from,
       voiceOffset: voiceOffsetAt(segmentsRef.current, from),
       mode: replayMode,
       volume: replayMode === 'original' ? settingsRef.current.volume : 0.92,
     })
-    setReplayPlaying(clip.playing)
+    if (mountedRef.current) setReplayPlaying(clip.playing)
   }
 
   function pickTime(time: number): void {
@@ -462,7 +555,7 @@ export function PracticeView({
     setCursor(next)
     setSelected(
       readingAt(pointsRef.current, next, song.melody, {
-        transpose: settingsRef.current.transpose,
+        transpose: sessionTransposeRef.current,
         octaveAlign: settingsRef.current.octaveAlign,
         tolerance: settingsRef.current.tolerance,
       }),
@@ -512,7 +605,7 @@ export function PracticeView({
 
     const points = pointsRef.current.slice()
     const report = evaluateSession(points, song.melody, {
-      transpose: settingsRef.current.transpose,
+      transpose: sessionTransposeRef.current,
       octaveAlign: settingsRef.current.octaveAlign,
       tolerance: settingsRef.current.tolerance,
     })
@@ -529,7 +622,7 @@ export function PracticeView({
       score: report.score,
       hitRate: report.hitRate,
       tolerance: settingsRef.current.tolerance,
-      transpose: settingsRef.current.transpose,
+      transpose: sessionTransposeRef.current,
       octaveAlign: settingsRef.current.octaveAlign,
       points,
       melodyNotes: song.melody.notes,
@@ -657,6 +750,12 @@ export function PracticeView({
         right={
           <div className="topbar-tools">
             <span className="key-hints desktop-only">空格 暂停/继续 · Esc 返回</span>
+            {sessionTranspose !== 0 && (
+              <span className="tag warn">
+                移调 {sessionTranspose > 0 ? '+' : ''}
+                {sessionTranspose}
+              </span>
+            )}
             <span className="tag">±{effectiveSettings.tolerance}</span>
           </div>
         }
@@ -678,6 +777,16 @@ export function PracticeView({
               </button>
             </div>
           </section>
+        </main>
+      ) : phase === 'starting' ? (
+        <main className="page practice-ending">
+          <div className="spinner large" />
+          <h2>{statusText}</h2>
+          <p className="muted">
+            {sessionTranspose !== 0
+              ? '伴奏变调需要先在本机处理一遍，通常几秒到十几秒。'
+              : '正在准备麦克风与伴奏…'}
+          </p>
         </main>
       ) : phase === 'ending' ? (
         <main className="page practice-ending">
@@ -702,23 +811,25 @@ export function PracticeView({
                         type="button"
                         aria-pressed={playbackMode === track.value}
                         className={playbackMode === track.value ? 'active' : ''}
-                        disabled={!available || phase === 'starting'}
-                        onClick={() => changePlaybackMode(track.value)}
+                        disabled={!available || trackBusy != null}
+                        onClick={() => void changePlaybackMode(track.value)}
                       >
-                        {track.label}
+                        {trackBusy === track.value ? '准备…' : track.label}
                       </button>
                     )
                   })}
                 </div>
-                {!hasAccompaniment && (
+                {trackBusy != null ? (
+                  <span className="roll-track-note">正在准备变调音轨…</span>
+                ) : !hasAccompaniment ? (
                   <span className="roll-track-note">这首歌没有人声分离结果</span>
-                )}
+                ) : null}
               </div>
               <PitchRoll
                 melody={song.melody}
                 pointsRef={pointsRef}
                 duration={song.buffer.duration}
-                transpose={effectiveSettings.transpose}
+                transpose={sessionTranspose}
                 octaveAlign={effectiveSettings.octaveAlign}
                 tolerance={effectiveSettings.tolerance}
                 mode="practice"
@@ -849,11 +960,13 @@ export function PracticeView({
                   <div className="replay-head">
                     <span>从这里回放</span>
                     <span className="tiny-note">
-                      {snapshotLoading
-                        ? '正在准备录音…'
-                        : voiceReady
-                          ? '可回放你自己的声音'
-                          : '这次还没录到可回放的音频'}
+                      {replayBusy
+                        ? '正在准备变调回放…'
+                        : snapshotLoading
+                          ? '正在准备录音…'
+                          : voiceReady
+                            ? '可回放你自己的声音'
+                            : '这次还没录到可回放的音频'}
                     </span>
                   </div>
                   <div className="segmented compact" role="group" aria-label="回放内容">
@@ -904,7 +1017,6 @@ export function PracticeView({
                 type="button"
                 className="round-btn dock-primary"
                 aria-label={phase === 'active' ? '暂停并回看' : '继续唱'}
-                disabled={phase === 'starting'}
                 onClick={() => {
                   if (phase === 'active') void pauseSession()
                   else if (phase === 'paused') void resumeSession()
@@ -923,7 +1035,6 @@ export function PracticeView({
                 max={Math.max(0.1, song.buffer.duration)}
                 step={0.1}
                 value={phase === 'active' ? now : cursor ?? pausedAt ?? 0}
-                disabled={phase === 'starting'}
                 onChange={(event) => scrubTo(Number(event.target.value))}
               />
               <span className="dock-time dim">{formatTime(song.buffer.duration)}</span>

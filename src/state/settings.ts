@@ -5,7 +5,7 @@ export type Tolerance = 25 | 50 | 75
 export interface Settings {
   tolerance: Tolerance
   octaveAlign: boolean
-  /** 参考旋律整体移调，-6..+6 半音。 */
+  /** 参考旋律与伴奏/原曲一起移调，-6..+6 半音（保持速度）。 */
   transpose: number
   /** null 表示使用启动时按设备延迟自动估算的值。 */
   latencyMs: number | null

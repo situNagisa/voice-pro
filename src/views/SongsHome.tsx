@@ -40,8 +40,10 @@ interface SongsHomeProps {
   records: PracticeRecordMeta[]
   /** 设置里清空歌曲库后递增，用来让首页重新读取列表 */
   libraryRevision: number
+  recordingAllowed: boolean
   onSong: (song: LoadedSong) => void
   onOpenSettings: () => void
+  onOpenPrivacy: () => void
 }
 
 const ACCEPTED_EXTENSIONS = ['mp3', 'm4a', 'wav', 'flac', 'ogg']
@@ -59,8 +61,10 @@ export function SongsHome({
   settings,
   records,
   libraryRevision,
+  recordingAllowed,
   onSong,
   onOpenSettings,
+  onOpenPrivacy,
 }: SongsHomeProps) {
   const demos = listDemoSongs()
   const [demoBusy, setDemoBusy] = useState<string | null>(null)
@@ -362,6 +366,19 @@ export function SongsHome({
         {!secure && (
           <Notice tone="warn">
             当前页面不是 HTTPS，手机浏览器会拒绝麦克风。请用 https 或 localhost 打开。
+          </Notice>
+        )}
+
+        {!recordingAllowed && (
+          <Notice tone="warn">
+            <div className="notice-line">
+              <span>当前为仅浏览模式：你尚未同意隐私说明，练唱与录音功能已关闭。</span>
+            </div>
+            <div className="notice-actions">
+              <button type="button" className="text-btn" onClick={onOpenPrivacy}>
+                查看隐私说明并同意
+              </button>
+            </div>
           </Notice>
         )}
 

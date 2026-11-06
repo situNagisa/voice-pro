@@ -6,6 +6,7 @@ import {
   getLibraryUsage,
 } from '../library'
 import type { LibraryUsage } from '../library'
+import type { PrivacyChoice } from '../state/privacy'
 import type { Settings } from '../state/settings'
 import { Notice, Segmented, Slider, Stepper, Toggle } from './controls'
 import { CloseIcon } from './icons'
@@ -14,22 +15,26 @@ interface SettingsSheetProps {
   open: boolean
   settings: Settings
   recordCount: number
+  privacyChoice: PrivacyChoice | null
   onClose: () => void
   onPatch: (patch: Partial<Settings>) => void
   onReset: () => void
   onClearRecords: () => void
   onLibraryCleared: () => void
+  onOpenPrivacy: () => void
 }
 
 export function SettingsSheet({
   open,
   settings,
   recordCount,
+  privacyChoice,
   onClose,
   onPatch,
   onReset,
   onClearRecords,
   onLibraryCleared,
+  onOpenPrivacy,
 }: SettingsSheetProps) {
   const [usage, setUsage] = useState<LibraryUsage | null>(null)
 
@@ -117,18 +122,18 @@ export function SettingsSheet({
               hint="男声唱女歌等整体差八度时，按最近的八度比较。"
             />
             <Stepper
-              label="参考旋律移调"
+              label="整首移调（参考与伴奏）"
               value={settings.transpose}
               min={-6}
               max={6}
               onChange={(value) => onPatch({ transpose: value })}
               format={(value) => `${value > 0 ? '+' : ''}${value} 半音`}
-              hint="只移动参考条块与评分；原曲、伴奏播放不变调。"
+              hint="参考旋律、伴奏与原曲会一起变调（保持速度）。进入练唱后本次练习会锁定当时的移调。"
             />
             {settings.transpose !== 0 && (
               <Notice tone="warn">
-                参考旋律已移调 {settings.transpose > 0 ? '+' : ''}
-                {settings.transpose} 半音。跟着原曲唱时请调回 0。
+                已移调 {settings.transpose > 0 ? '+' : ''}
+                {settings.transpose} 半音。开始练唱时会花几秒准备变调伴奏；循环练习里可以随时再调。
               </Notice>
             )}
           </section>
@@ -217,6 +222,33 @@ export function SettingsSheet({
             >
               恢复默认设置
             </button>
+          </section>
+
+          <section className="sheet-section">
+            <h3>隐私与权限</h3>
+            <div className="sheet-data-row">
+              <div>
+                <strong>麦克风与本地数据</strong>
+                <span>
+                  {privacyChoice === 'accepted'
+                    ? '已同意隐私说明，录音相关功能可用。'
+                    : privacyChoice === 'declined'
+                      ? '当前为仅浏览模式，录音与练唱已关闭。'
+                      : '尚未选择，下次启动会再次询问。'}
+                </span>
+              </div>
+              <button type="button" className="btn small secondary" onClick={onOpenPrivacy}>
+                查看说明
+              </button>
+            </div>
+            <a
+              className="text-btn align-left"
+              href="/privacy.html"
+              target="_blank"
+              rel="noreferrer"
+            >
+              打开完整隐私政策
+            </a>
           </section>
 
           <section className="sheet-section about">

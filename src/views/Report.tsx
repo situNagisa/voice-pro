@@ -1,9 +1,11 @@
 import { useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { evaluateSession } from '../audio/analysis'
+import { diagnoseSession } from '../audio/diagnosis'
 import { formatCents, formatTime, midiToNoteName } from '../audio/pitch'
 import { readingAt, recordMelody } from '../audio/review'
 import type { PracticeRecord } from '../state/records'
+import type { PracticeLoopTarget } from '../state/session'
 import { TopBar } from '../ui/controls'
 import { ChevronRightIcon, PlayIcon, RefreshIcon } from '../ui/icons'
 import { PitchRoll } from '../ui/PitchRoll'
@@ -14,6 +16,7 @@ interface ReportViewProps {
   onBack: () => void
   onReview: (startAt: number) => void
   onRestart: () => void
+  onPracticeLoop: (targets: PracticeLoopTarget[], label: string) => void
 }
 
 function gradeFor(score: number | null): { title: string; desc: string } {
@@ -37,7 +40,13 @@ function scoreTone(score: number | null): string {
   return 'low'
 }
 
-export function ReportView({ record, onBack, onReview, onRestart }: ReportViewProps) {
+export function ReportView({
+  record,
+  onBack,
+  onReview,
+  onRestart,
+  onPracticeLoop,
+}: ReportViewProps) {
   const melody = useMemo(() => recordMelody(record), [record])
   const report = useMemo(
     () =>
@@ -47,6 +56,14 @@ export function ReportView({ record, onBack, onReview, onRestart }: ReportViewPr
         tolerance: record.tolerance,
       }),
     [record, melody],
+  )
+  const diagnoses = useMemo(
+    () => diagnoseSession(record, melody, report),
+    [record, melody, report],
+  )
+  const phraseMap = useMemo(
+    () => new Map(report.phrases.map((phrase) => [phrase.index, phrase])),
+    [report.phrases],
   )
   const grade = gradeFor(record.score)
   const scoreStyle = { '--score': record.score ?? 0 } as CSSProperties
@@ -92,6 +109,33 @@ export function ReportView({ record, onBack, onReview, onRestart }: ReportViewPr
     previewCenterRef.current = Math.max(0, phrase.start + (phrase.end - phrase.start) / 2)
   }
 
+  function practicePhrases(indexes: number[], label: string): void {
+    const targets: PracticeLoopTarget[] = []
+    for (const index of indexes) {
+      const phrase = phraseMap.get(index)
+      if (!phrase) continue
+      targets.push({
+        start: phrase.start,
+        end: phrase.end,
+        label: `第 ${phrase.index + 1} 句`,
+      })
+    }
+    if (targets.length > 0) onPracticeLoop(targets, label)
+  }
+
+  function practiceOne(phrase: { index: number; start: number; end: number }): void {
+    onPracticeLoop(
+      [
+        {
+          start: phrase.start,
+          end: phrase.end,
+          label: `第 ${phrase.index + 1} 句`,
+        },
+      ],
+      '单句循环',
+    )
+  }
+
   return (
     <div className="screen report-screen">
       <TopBar
@@ -126,6 +170,62 @@ export function ReportView({ record, onBack, onReview, onRestart }: ReportViewPr
               )}
             </div>
           </div>
+        </section>
+
+        <section className="card diagnosis-card">
+          <div className="section-head diagnosis-head">
+            <div>
+              <p className="eyebrow">主要问题</p>
+              <h2>这次最值得改的</h2>
+              <p>从本次音高轨迹里自动归纳，只列有足够数据支撑的问题。</p>
+            </div>
+            <span className="tiny-note">{report.validFrames} 个有效音高</span>
+          </div>
+          {report.validFrames < 40 ? (
+            <div className="diagnosis-empty">
+              <strong>数据还不够，先不判断</strong>
+              <span>这次有效音高太少。戴耳机、跟着伴奏完整唱一遍，再来看看主要问题。</span>
+            </div>
+          ) : diagnoses.length === 0 ? (
+            <div className="diagnosis-empty good">
+              <strong>没有明显集中的问题</strong>
+              <span>音准整体比较稳定。可以尝试 ±25 音分的更严格判定，或直接挑最弱的一句循环练。</span>
+            </div>
+          ) : (
+            <ul className="diagnosis-list">
+              {diagnoses.map((diagnosis) => {
+                const phraseLabels = diagnosis.phraseIndexes.flatMap((index) => {
+                  const phrase = phraseMap.get(index)
+                  return phrase ? [`第 ${phrase.index + 1} 句`] : []
+                })
+                return (
+                  <li key={diagnosis.id} className={`diagnosis-item tone-${diagnosis.tone}`}>
+                    <div className="diagnosis-main">
+                      <span className={`diagnosis-dot ${diagnosis.tone}`} aria-hidden="true" />
+                      <div className="diagnosis-copy">
+                        <strong>{diagnosis.title}</strong>
+                        <p>{diagnosis.detail}</p>
+                        {phraseLabels.length > 0 && (
+                          <span className="diagnosis-phrases">
+                            涉及 {phraseLabels.join('、')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn small secondary diagnosis-action"
+                      disabled={phraseLabels.length === 0}
+                      onClick={() => practicePhrases(diagnosis.phraseIndexes, diagnosis.title)}
+                    >
+                      {phraseLabels.length === 0 ? '暂无对应句子' : '去练这几句'}
+                      <ChevronRightIcon />
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
         </section>
 
         <section className="report-stats">
@@ -212,6 +312,15 @@ export function ReportView({ record, onBack, onReview, onRestart }: ReportViewPr
                         <ChevronRightIcon />
                       </span>
                     </button>
+                    <div className="phrase-actions-row">
+                      <button
+                        type="button"
+                        className="text-btn phrase-train-btn"
+                        onClick={() => practiceOne(phrase)}
+                      >
+                        循环练这句 · 1 拍预备
+                      </button>
+                    </div>
                   </li>
                 )
               })}
@@ -233,14 +342,23 @@ export function ReportView({ record, onBack, onReview, onRestart }: ReportViewPr
                   {activePhrase.hitRate != null && ` · 命中 ${Math.round(activePhrase.hitRate * 100)}%`}
                 </span>
               </div>
-              <button
-                type="button"
-                className="btn small secondary"
-                onClick={() => onReview(activePhrase.start)}
-              >
-                打开完整回看
-                <ChevronRightIcon />
-              </button>
+              <div className="preview-actions">
+                <button
+                  type="button"
+                  className="btn small secondary"
+                  onClick={() => practiceOne(activePhrase)}
+                >
+                  循环练这句
+                </button>
+                <button
+                  type="button"
+                  className="btn small secondary"
+                  onClick={() => onReview(activePhrase.start)}
+                >
+                  打开完整回看
+                  <ChevronRightIcon />
+                </button>
+              </div>
             </div>
             <div className="preview-roll">
               <PitchRoll

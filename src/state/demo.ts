@@ -35,6 +35,7 @@ export function demoMelody(id: string, duration: number): ReferenceMelody {
 export async function loadDemoSong(id: string): Promise<LoadedSong> {
   const meta = listDemoSongs().find((song) => song.id === id)
   if (!meta) throw new Error('没有找到这首示例歌')
+  const spec = DEMO_SONG_SPECS.find((song) => song.id === id)
   const [buffer, stems] = await Promise.all([
     renderDemoSong(id),
     renderDemoStems(id).catch((error: unknown) => {
@@ -52,5 +53,6 @@ export async function loadDemoSong(id: string): Promise<LoadedSong> {
     importedAt: Date.now(),
     accompaniment: stems?.accompaniment ?? null,
     vocals: stems?.vocals ?? null,
+    bpm: spec?.bpm,
   }
 }

@@ -8,7 +8,7 @@ import type { ReadingAt } from '../audio/review'
 import { loadLibrarySong } from '../library'
 import { loadDemoSong } from '../state/demo'
 import type { PracticeRecord } from '../state/records'
-import type { LoadedSong } from '../state/session'
+import type { LoadedSong, PracticeLoopTarget } from '../state/session'
 import { Notice, TopBar } from '../ui/controls'
 import { PauseIcon, PlayIcon, RefreshIcon, StopIcon } from '../ui/icons'
 import { PitchRoll } from '../ui/PitchRoll'
@@ -20,6 +20,11 @@ interface ReviewViewProps {
   initialSong: LoadedSong | null
   startAt: number
   onBack: () => void
+  onPracticeLoop: (
+    song: LoadedSong,
+    targets: PracticeLoopTarget[],
+    label: string,
+  ) => void
 }
 
 const REPLAY_MODES: { value: ReplayMode; label: string }[] = [
@@ -45,7 +50,13 @@ function scoreTone(score: number | null): string {
   return 'low'
 }
 
-export function ReviewView({ record, initialSong, startAt, onBack }: ReviewViewProps) {
+export function ReviewView({
+  record,
+  initialSong,
+  startAt,
+  onBack,
+  onPracticeLoop,
+}: ReviewViewProps) {
   const isDesktop = useIsDesktop()
   const pointsRef = useRef(
     record.points.slice().sort((a, b) => a.t - b.t),
@@ -302,6 +313,21 @@ export function ReviewView({ record, initialSong, startAt, onBack }: ReviewViewP
       cursor != null && cursor >= phrase.start - 0.05 && cursor <= phrase.end + 0.05,
   )
 
+  function practicePhrase(phrase: { index: number; start: number; end: number }): void {
+    if (!song) return
+    onPracticeLoop(
+      song,
+      [
+        {
+          start: phrase.start,
+          end: phrase.end,
+          label: `第 ${phrase.index + 1} 句`,
+        },
+      ],
+      '单句循环',
+    )
+  }
+
   const phraseStats = new Map(report.phrases.map((phrase) => [phrase.index, phrase]))
   function modeEnabled(value: ReplayMode): boolean {
     if (value === 'voice') return voiceReady
@@ -382,11 +408,37 @@ export function ReviewView({ record, initialSong, startAt, onBack }: ReviewViewP
               <span>目标 {selectedTarget?.label ?? '—'}</span>
               <span>{selected.point.f0.toFixed(1)} Hz</span>
             </div>
+            {highlight && (
+              <div className="review-practice-row">
+                <button
+                  type="button"
+                  className="btn small secondary"
+                  disabled={!song}
+                  onClick={() => practicePhrase(highlight)}
+                >
+                  循环练这句 · 1 拍预备
+                </button>
+                {!song && <span className="tiny-note">原唱/伴奏加载后可循环</span>}
+              </div>
+            )}
           </section>
         ) : (
           <section className="review-readout card empty">
             <strong>{cursor == null ? '点曲线选择时刻' : `${formatTime(cursor)} 附近没有检测到人声`}</strong>
             <span>拖动查看历史，点按落下游标；也可以直接播放这一段的录音。</span>
+            {highlight && (
+              <div className="review-practice-row">
+                <button
+                  type="button"
+                  className="btn small secondary"
+                  disabled={!song}
+                  onClick={() => practicePhrase(highlight)}
+                >
+                  循环练这句 · 1 拍预备
+                </button>
+                {!song && <span className="tiny-note">原唱/伴奏加载后可循环</span>}
+              </div>
+            )}
           </section>
         )}
 

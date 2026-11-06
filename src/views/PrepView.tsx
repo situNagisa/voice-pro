@@ -1,24 +1,66 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { InputSource } from '../audio/capture'
+import { adviseKey } from '../audio/keyAdvisor'
 import { formatTime } from '../audio/pitch'
+import { loadVoiceStats } from '../state/records'
+import type { VoiceRangeSummary } from '../state/records'
 import type { LoadedSong } from '../state/session'
 import type { Settings } from '../state/settings'
-import { SourcePicker, TopBar } from '../ui/controls'
+import { Notice, SourcePicker, Stepper, TopBar } from '../ui/controls'
 import { HeadphonesIcon, PlayIcon, SongIcon } from '../ui/icons'
 
 interface PrepViewProps {
   song: LoadedSong
   settings: Settings
+  recordingAllowed: boolean
   onBack: () => void
   onStart: (source: InputSource) => void
+  onPatchSettings: (patch: Partial<Settings>) => void
+  onOpenPrivacy: () => void
 }
 
-export function PrepView({ song, settings, onBack, onStart }: PrepViewProps) {
+export function PrepView({
+  song,
+  settings,
+  recordingAllowed,
+  onBack,
+  onStart,
+  onPatchSettings,
+  onOpenPrivacy,
+}: PrepViewProps) {
   const [source, setSource] = useState<InputSource>('mic')
   const [countdown, setCountdown] = useState<number | null>(null)
+  const [voiceStats, setVoiceStats] = useState<VoiceRangeSummary | null>(null)
+  const [voiceLoading, setVoiceLoading] = useState(true)
   const startedRef = useRef(false)
 
   useEffect(() => {
+    let active = true
+    void loadVoiceStats()
+      .then((stats) => {
+        if (active) setVoiceStats(stats)
+      })
+      .catch(() => {
+        if (active) setVoiceStats(null)
+      })
+      .finally(() => {
+        if (active) setVoiceLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const advice = useMemo(
+    () => adviseKey(voiceStats, song.melody.notes),
+    [voiceStats, song.melody.notes],
+  )
+
+  useEffect(() => {
+    if (!recordingAllowed) {
+      if (countdown != null) setCountdown(null)
+      return
+    }
     if (countdown == null) return
     if (countdown <= 0) {
       if (startedRef.current) return
@@ -28,7 +70,7 @@ export function PrepView({ song, settings, onBack, onStart }: PrepViewProps) {
     }
     const timer = window.setTimeout(() => setCountdown(countdown - 1), 1000)
     return () => window.clearTimeout(timer)
-  }, [countdown, onStart, source])
+  }, [countdown, onStart, source, recordingAllowed])
 
   const seconds = song.buffer.duration
   const noteCount = song.melody.notes.length
@@ -75,8 +117,82 @@ export function PrepView({ song, settings, onBack, onStart }: PrepViewProps) {
           </div>
         )}
 
+        {!recordingAllowed && (
+          <Notice tone="warn">
+            <div className="notice-line">
+              <span>当前为仅浏览模式：你还没有同意隐私说明，麦克风、录音与练唱不会启用。</span>
+            </div>
+            <div className="notice-actions">
+              <button type="button" className="text-btn" onClick={onOpenPrivacy}>
+                查看隐私说明并同意
+              </button>
+            </div>
+          </Notice>
+        )}
+
+        <section
+          className={`card key-advice ${advice.sufficient && advice.semitones !== 0 ? 'has-suggestion' : ''}`}
+        >
+          <div className="key-advice-head">
+            <div>
+              <p className="eyebrow">为你推荐调性</p>
+              <h2>{voiceLoading ? '正在统计你唱过的音高…' : advice.headline}</h2>
+              <p>
+                {voiceLoading
+                  ? '只统计本机练习记录，不上传声音。'
+                  : advice.detail}
+              </p>
+            </div>
+            {!voiceLoading && advice.sufficient && (
+              <div className="key-advice-value" aria-hidden="true">
+                {advice.semitones > 0 ? '+' : ''}
+                {advice.semitones}
+                <span>半音</span>
+              </div>
+            )}
+          </div>
+          <div className="key-advice-foot">
+            {voiceLoading ? (
+              <span className="tiny-note">正在读取历史练习记录…</span>
+            ) : advice.sufficient ? (
+              <>
+                <span className="tiny-note">
+                  推荐会同时作用在参考旋律与伴奏上，保持速度不变。
+                </span>
+                <button
+                  type="button"
+                  className="btn secondary small"
+                  disabled={settings.transpose === advice.semitones}
+                  onClick={() => onPatchSettings({ transpose: advice.semitones })}
+                >
+                  {settings.transpose === advice.semitones
+                    ? '已应用这个调'
+                    : `用 ${advice.semitones > 0 ? '+' : ''}${advice.semitones} 练`}
+                </button>
+              </>
+            ) : (
+              <span className="tiny-note">
+                还不用急着定调。完成两三次练唱后，这里会根据你实际唱出的高音和低音给出建议。
+              </span>
+            )}
+          </div>
+        </section>
+
         <section className="card prep-card">
-          <SourcePicker value={source} onChange={setSource} />
+          <SourcePicker
+            value={source}
+            onChange={setSource}
+            disabled={!recordingAllowed}
+          />
+          <Stepper
+            label="移调"
+            value={settings.transpose}
+            min={-6}
+            max={6}
+            onChange={(value) => onPatchSettings({ transpose: value })}
+            format={(value) => `${value > 0 ? '+' : ''}${value} 半音`}
+            hint="参考旋律、伴奏与原曲一起变调，速度不变；示例歌与导入歌都支持。"
+          />
           <div className="prep-tip">
             <HeadphonesIcon />
             <div>
@@ -99,10 +215,17 @@ export function PrepView({ song, settings, onBack, onStart }: PrepViewProps) {
           <button
             type="button"
             className="btn primary xl start-button"
-            onClick={() => setCountdown(3)}
+            disabled={!recordingAllowed}
+            onClick={() => {
+              if (!recordingAllowed) {
+                onOpenPrivacy()
+                return
+              }
+              setCountdown(3)
+            }}
           >
             <PlayIcon />
-            开始练唱
+            {recordingAllowed ? '开始练唱' : '请先同意隐私说明'}
           </button>
           <p className="tiny-note center">建议在安静的环境里，离手机约 20 厘米</p>
         </section>
